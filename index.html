@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>远程控制</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: system-ui, sans-serif;
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 0 16px;
+            background-color: #f5f7fa;
+        }
+        .container {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        .item {
+            margin-bottom: 16px;
+        }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        button {
+            padding: 9px 18px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #connectBtn {
+            background-color: #1677ff;
+            color: white;
+        }
+        #connectBtn.disconnect {
+            background-color: #f5222d;
+        }
+        #refreshBtn {
+            background-color: #1677ff;
+            color: white;
+        }
+        #refreshBtn:disabled {
+            background-color: #a5c6ff;
+            cursor: not-allowed;
+        }
+        /* 图片显示区域 */
+        #screenArea {
+            width: 100%;
+            min-height: 300px;
+            border: 2px dashed #d0d7de;
+            border-radius: 8px;
+            background-color: #fafafa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            cursor: pointer;
+            position: relative;
+            padding: 10px;
+        }
+        #screenArea img {
+            max-width: 100%;
+            max-height: 600px;
+            display: block;
+            border-radius: 4px;
+        }
+        #screenPlaceholder {
+            color: #888;
+            font-size: 14px;
+            padding: 40px 0;
+            text-align: center;
+            line-height: 1.8;
+        }
+        #statusBar {
+            font-size: 13px;
+            color: #888;
+            margin-top: 10px;
+            min-height: 18px;
+        }
+        /* 大图弹窗容器 */
+        .image-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0,0,0,0.85);
+            z-index: 9999;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-toolbar {
+            margin-bottom: 12px;
+            display: flex;
+            gap: 10px;
+        }
+        .modal-canvas-wrap {
+            position: relative;
+        }
+        #pointCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        #modalImage {
+            max-width: 90vw;
+            max-height: 75vh;
+            display: block;
+        }
+        .point-info {
+            color: #fff;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        .hint {
+            color: #999;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="item">
+        <label>WebSocket地址(ws:// 或 wss://)</label>
+        <input id="wsUrl" type="text">
+    </div>
+    <div class="item" style="display:flex; gap:10px; align-items:center;">
+        <button id="connectBtn">连接</button>
+        <button id="refreshBtn" disabled>刷新画面</button>
+    </div>
+
+    <!-- 图片显示区域：点击可放大选点 -->
+    <div class="item">
+        <label>屏幕画面</label>
+        <div id="screenArea">
+            <div id="screenPlaceholder">暂无画面<br>连接后会自动截取一次画面<br>也可点击"刷新画面"手动更新</div>
+        </div>
+    </div>
+
+    <div id="statusBar">未连接</div>
+</div>
+
+<!-- 大图弹窗 -->
+<div class="image-modal" id="imageModal">
+    <div class="modal-toolbar">
+        <button id="clearPointsBtn">清除选点</button>
+        <button id="confirmPointsBtn">确认并发送</button>
+        <button id="closeModalBtn">关闭</button>
+    </div>
+    <div class="modal-canvas-wrap">
+        <img id="modalImage" alt="大图预览">
+        <canvas id="pointCanvas"></canvas>
+    </div>
+    <div class="point-info" id="pointInfo">选点：无</div>
+</div>
+
+<script>
+    let ws = null;
+    const wsUrlInput = document.getElementById('wsUrl');
+    const connectBtn = document.getElementById('connectBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const statusBar = document.getElementById('statusBar');
+
+    // 图片显示区域
+    const screenArea = document.getElementById('screenArea');
+    const screenPlaceholder = document.getElementById('screenPlaceholder');
+
+    // 弹窗相关
+    const imageModal = document.getElementById('imageModal');
+    const modalImage = document.getElementById('modalImage');
+    const pointCanvas = document.getElementById('pointCanvas');
+    const pointCtx = pointCanvas.getContext('2d');
+    const clearPointsBtn = document.getElementById('clearPointsBtn');
+    const confirmPointsBtn = document.getElementById('confirmPointsBtn');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const pointInfo = document.getElementById('pointInfo');
+
+    let currentImageBlobUrl = null;
+    let pointList = []; // {x:像素X,y:像素Y}
+
+    function setStatus(text){
+        statusBar.innerText = text;
+    }
+
+    // 将收到的截图显示到主图片区域
+    function showScreenImage(blob){
+        const url = URL.createObjectURL(blob);
+        if(currentImageBlobUrl){
+            URL.revokeObjectURL(currentImageBlobUrl);
+        }
+        currentImageBlobUrl = url;
+        screenPlaceholder.style.display = 'none';
+        let img = screenArea.querySelector('img');
+        if(!img){
+            img = document.createElement('img');
+            screenArea.appendChild(img);
+        }
+        img.src = url;
+        img.onclick = ()=>{
+            openImageModal(url);
+        };
+    }
+
+    // 发送截图命令
+    function sendCapture(){
+        if(!ws || ws.readyState !== WebSocket.OPEN){
+            alert('未建立连接');
+            return;
+        }
+        ws.send('Capture screenshot');
+        setStatus('已发送 Capture screenshot');
+    }
+
+    // 打开大图弹窗
+    function openImageModal(blobUrl){
+        modalImage.src = blobUrl;
+        pointList = [];
+        imageModal.style.display = 'flex';
+        // 图片加载完成后设置canvas尺寸
+        modalImage.onload = function(){
+            pointCanvas.width = modalImage.naturalWidth;
+            pointCanvas.height = modalImage.naturalHeight;
+            pointCanvas.style.width = modalImage.offsetWidth + 'px';
+            pointCanvas.style.height = modalImage.offsetHeight + 'px';
+            renderPoints();
+            updatePointInfo();
+        }
+    }
+
+    // 绘制标记点
+    function renderPoints(){
+        pointCtx.clearRect(0,0,pointCanvas.width,pointCanvas.height);
+        pointCtx.fillStyle = "#ff3333";
+        pointCtx.strokeStyle = "#fff";
+        pointCtx.lineWidth = 2;
+        for(const p of pointList){
+            pointCtx.beginPath();
+            pointCtx.arc(p.x,p.y,6,0,Math.PI*2);
+            pointCtx.fill();
+            pointCtx.stroke();
+        }
+    }
+
+    function updatePointInfo(){
+        if(pointList.length === 0){
+            pointInfo.innerText = "选点：无";
+        }else{
+            pointInfo.innerText = "选点坐标：" + JSON.stringify(pointList);
+        }
+    }
+
+    // 大图点击采集坐标
+    modalImage.addEventListener('click',(e)=>{
+        const rect = modalImage.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+        const scaleX = modalImage.naturalWidth / rect.width;
+        const scaleY = modalImage.naturalHeight / rect.height;
+        const px = Math.round(clickX * scaleX);
+        const py = Math.round(clickY * scaleY);
+        pointList.push({x:px,y:py});
+        renderPoints();
+        updatePointInfo();
+    })
+
+    clearPointsBtn.onclick = ()=>{
+        pointList = [];
+        renderPoints();
+        updatePointInfo();
+    }
+
+    confirmPointsBtn.onclick = ()=>{
+        if(pointList.length === 0){
+            alert("还没有选点");
+            return;
+        }
+        if(!ws || ws.readyState !== WebSocket.OPEN){
+            alert('未建立连接');
+            return;
+        }
+        // 根据选点生成命令并直接发送
+        const lines = [];
+        for(const p of pointList){
+            lines.push(`Move ${p.x} ${p.y}`);
+            lines.push("LeftClick");
+        }
+        // 自动刷新一次画面
+        lines.push("Capture screenshot");
+        for(const line of lines){
+            ws.send(line);
+        }
+        setStatus('已发送命令：' + lines.join(', '));
+        pointList = [];
+        renderPoints();
+        updatePointInfo();
+        imageModal.style.display = 'none';
+    }
+
+    closeModalBtn.onclick = ()=>{
+        imageModal.style.display = 'none';
+    }
+
+    connectBtn.addEventListener('click',()=>{
+        if(ws){
+            ws.close();
+            return;
+        }
+        const url = wsUrlInput.value.trim();
+        if(!url){
+            alert('请输入ws地址');
+            return;
+        }
+        ws = new WebSocket(url);
+        ws.binaryType = "blob";
+
+        connectBtn.textContent = '断开';
+        connectBtn.classList.add('disconnect');
+        refreshBtn.disabled = true;
+
+        ws.onopen = ()=>{
+            setStatus('✅ WebSocket连接成功，正在截取画面...');
+            // 连接成功即可使用刷新按钮
+            refreshBtn.disabled = false;
+            // 连接成功后自动发送一次 Capture screenshot 更新图片
+            ws.send('Capture screenshot');
+        };
+        ws.onmessage = (evt)=>{
+            if(evt.data instanceof Blob){
+                showScreenImage(evt.data);
+                setStatus('画面已更新');
+                refreshBtn.disabled = false;
+            }else{
+                setStatus('收到消息：' + evt.data);
+            }
+        };
+        ws.onerror = (err)=>{
+            setStatus('❌ 发生错误:' + err);
+        };
+        ws.onclose = (e)=>{
+            setStatus(`🔌 连接关闭 code:${e.code} reason:${e.reason}`);
+            ws = null;
+            connectBtn.textContent = '连接';
+            connectBtn.classList.remove('disconnect');
+            refreshBtn.disabled = true;
+        }
+    });
+
+    refreshBtn.addEventListener('click',()=>{
+        sendCapture();
+    });
+</script>
+</body>
+</html>

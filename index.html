@@ -60,6 +60,29 @@
             background-color: #a5c6ff;
             cursor: not-allowed;
         }
+        /* 快捷键小按钮 */
+        .shortcut-bar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .shortcut-btn {
+            padding: 4px 12px;
+            font-size: 12px;
+            background-color: #f0f2f5;
+            color: #333;
+            border: 1px solid #d0d7de;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .shortcut-btn:hover {
+            background-color: #e2e6ec;
+        }
+        .shortcut-btn:disabled {
+            background-color: #e6e8eb;
+            color: #999;
+            cursor: not-allowed;
+        }
         /* 图片显示区域 */
         #screenArea {
             width: 100%;
@@ -151,11 +174,34 @@
         <button id="refreshBtn" disabled>刷新画面</button>
     </div>
 
-    <!-- 图片显示区域：点击可放大选点 -->
+    <!-- 屏幕显示区域 -->
     <div class="item">
         <label>屏幕画面</label>
         <div id="screenArea">
             <div id="screenPlaceholder">暂无画面<br>连接后会自动截取一次画面<br>也可点击"刷新画面"手动更新</div>
+        </div>
+    </div>
+
+    <!-- 快捷键快捷按钮 -->
+    <div class="item">
+        <label>快捷键</label>
+        <div class="shortcut-bar">
+            <button class="shortcut-btn" data-cmd="enter" disabled>Enter</button>
+            <button class="shortcut-btn" data-cmd="esc" disabled>Esc</button>
+            <button class="shortcut-btn" data-cmd="ctrl-tab" disabled>Ctrl+tab</button>
+            <button class="shortcut-btn" data-cmd="alt-tab" disabled>Alt+tab</button>
+            <button class="shortcut-btn" data-cmd="alt-e" disabled>Alt+e</button>
+            <button class="shortcut-btn" data-cmd="alt-s" disabled>Alt+s</button>
+        </div>
+        <div class="shortcut-bar" style="margin-top:8px;">
+            <button class="shortcut-btn" data-cmd="f1" disabled>F1</button>
+            <button class="shortcut-btn" data-cmd="f2" disabled>F2</button>
+            <button class="shortcut-btn" data-cmd="f3" disabled>F3</button>
+            <button class="shortcut-btn" data-cmd="f4" disabled>F4</button>
+            <button class="shortcut-btn" data-cmd="f5" disabled>F5</button>
+            <button class="shortcut-btn" data-cmd="f6" disabled>F6</button>
+            <button class="shortcut-btn" data-cmd="f7" disabled>F7</button>
+            <button class="shortcut-btn" data-cmd="f8" disabled>F8</button>
         </div>
     </div>
 
@@ -233,6 +279,47 @@
         setStatus('已发送 Capture screenshot');
     }
 
+    // 快捷键命令映射（每条命令独立发送）
+    const shortcutMap = {
+        'enter':     ['KeyboardWrite enter', 'Wait 1', 'Capture screenshot'],
+        'esc':       ['KeyboardWrite esc', 'Wait 1', 'Capture screenshot'],
+        'ctrl-tab':  ['KeyboardPress ctrl', 'KeyboardWrite tab', 'KeyboardRelease ctrl', 'Wait 1', 'Capture screenshot'],
+        'alt-tab':   ['KeyboardPress alt', 'KeyboardWrite tab', 'KeyboardRelease alt', 'Wait 1', 'Capture screenshot'],
+        'alt-e':     ['KeyboardPress alt', 'KeyboardWrite e', 'KeyboardRelease alt', 'Wait 1', 'Capture screenshot'],
+        'alt-s':     ['KeyboardPress alt', 'KeyboardWrite s', 'KeyboardRelease alt', 'Wait 1', 'Capture screenshot'],
+        'f1':        ['KeyboardWrite f1', 'Wait 1', 'Capture screenshot'],
+        'f2':        ['KeyboardWrite f2', 'Wait 1', 'Capture screenshot'],
+        'f3':        ['KeyboardWrite f3', 'Wait 1', 'Capture screenshot'],
+        'f4':        ['KeyboardWrite f4', 'Wait 1', 'Capture screenshot'],
+        'f5':        ['KeyboardWrite f5', 'Wait 1', 'Capture screenshot'],
+        'f6':        ['KeyboardWrite f6', 'Wait 1', 'Capture screenshot'],
+        'f7':        ['KeyboardWrite f7', 'Wait 1', 'Capture screenshot'],
+        'f8':        ['KeyboardWrite f8', 'Wait 1', 'Capture screenshot'],
+    };
+    const shortcutBtns = document.querySelectorAll('.shortcut-btn');
+    function setShortcutEnabled(enabled){
+        for(const b of shortcutBtns){
+            b.disabled = !enabled;
+        }
+    }
+    function sendShortcut(cmd){
+        const lines = shortcutMap[cmd];
+        if(!lines) return;
+        if(!ws || ws.readyState !== WebSocket.OPEN){
+            alert('未建立连接');
+            return;
+        }
+        for(const line of lines){
+            ws.send(line);
+        }
+        setStatus('已发送命令：' + lines.join(', '));
+    }
+    shortcutBtns.forEach((btn)=>{
+        btn.addEventListener('click',()=>{
+            sendShortcut(btn.dataset.cmd);
+        });
+    });
+
     // 打开大图弹窗
     function openImageModal(blobUrl){
         modalImage.src = blobUrl;
@@ -303,11 +390,12 @@
         // 根据选点生成命令并直接发送
         const lines = [];
         for(const p of pointList){
-            lines.push(`Move ${p.x} ${p.y}`);
-            lines.push("LeftClick");
+            lines.push(`MouseMoveTo ${p.x} ${p.y}`);
+            lines.push('MouseLeftClick');
         }
         // 自动刷新一次画面
-        lines.push("Capture screenshot");
+        lines.push('Wait 1');
+        lines.push('Capture screenshot');
         for(const line of lines){
             ws.send(line);
         }
@@ -338,11 +426,13 @@
         connectBtn.textContent = '断开';
         connectBtn.classList.add('disconnect');
         refreshBtn.disabled = true;
+        setShortcutEnabled(false);
 
         ws.onopen = ()=>{
             setStatus('✅ WebSocket连接成功，正在截取画面...');
-            // 连接成功即可使用刷新按钮
+            // 连接成功即可使用刷新按钮和快捷键
             refreshBtn.disabled = false;
+            setShortcutEnabled(true);
             // 连接成功后自动发送一次 Capture screenshot 更新图片
             ws.send('Capture screenshot');
         };
@@ -364,6 +454,7 @@
             connectBtn.textContent = '连接';
             connectBtn.classList.remove('disconnect');
             refreshBtn.disabled = true;
+            setShortcutEnabled(false);
         }
     });
 

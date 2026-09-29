@@ -12,15 +12,15 @@
         }
         body {
             font-family: system-ui, sans-serif;
-            max-width: 1000px;
-            margin: 20px auto;
-            padding: 0 16px;
+            margin: 0;
+            padding: 0;
             background-color: #f5f7fa;
         }
         .container {
             background: #fff;
-            padding: 20px;
-            border-radius: 10px;
+            width: 100%;
+            min-height: 100vh;
+            padding: 20px 24px;
             box-shadow: 0 2px 12px rgba(0,0,0,0.08);
         }
         .item {
@@ -95,11 +95,13 @@
             background-color: #a5c6ff;
             cursor: not-allowed;
         }
-        /* 快捷键小按钮 */
+        /* 操作小按钮 */
         .shortcut-bar {
             display: flex;
             gap: 8px;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            padding-bottom: 4px;
         }
         .shortcut-btn {
             padding: 4px 12px;
@@ -109,6 +111,8 @@
             border: 1px solid #d0d7de;
             border-radius: 5px;
             cursor: pointer;
+            white-space: nowrap;
+            flex-shrink: 0;
         }
         .shortcut-btn:hover {
             background-color: #e2e6ec;
@@ -121,7 +125,7 @@
         /* 图片显示区域 */
         #screenArea {
             width: 100%;
-            min-height: 300px;
+            height: 600px;
             border: 2px dashed #d0d7de;
             border-radius: 8px;
             background-color: #fafafa;
@@ -131,13 +135,18 @@
             overflow: hidden;
             cursor: pointer;
             position: relative;
-            padding: 10px;
+            padding: 0;
         }
         #screenArea img {
-            max-width: 100%;
-            max-height: 600px;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
             display: block;
-            border-radius: 4px;
+        }
+        #screenPointCanvas {
+            position: absolute;
+            pointer-events: none;
+            z-index: 2;
         }
         #screenPlaceholder {
             color: #888;
@@ -152,78 +161,39 @@
             margin-top: 10px;
             min-height: 18px;
         }
-        /* 大图弹窗容器 */
-        .image-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0,0,0,0.85);
-            z-index: 9999;
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .modal-toolbar {
-            margin-bottom: 12px;
-            display: flex;
-            gap: 10px;
-        }
-        .modal-canvas-wrap {
-            position: relative;
-        }
-        #pointCanvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            pointer-events: none;
-        }
-        #modalImage {
-            max-width: 90vw;
-            max-height: 75vh;
-            display: block;
-        }
-        .point-info {
-            color: #fff;
-            margin-top: 10px;
-            font-size: 14px;
-        }
-        .hint {
-            color: #999;
-            font-size: 12px;
-            margin-top: 4px;
-        }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="item">
         <label>WebSocket地址</label>
-        <div class="ws-wrap">
-            <input id="wsUrl" type="text" autocomplete="off">
-            <div id="wsHistory" class="ws-history"></div>
+        <div style="display:flex; gap:10px; align-items:center;">
+            <div class="ws-wrap" style="flex:1; min-width:0;">
+                <input id="wsUrl" type="text" autocomplete="off">
+                <div id="wsHistory" class="ws-history"></div>
+            </div>
+            <button id="connectBtn">连接</button>
+            <button id="refreshBtn" disabled>刷新画面</button>
         </div>
-    </div>
-    <div class="item" style="display:flex; gap:10px; align-items:center;">
-        <button id="connectBtn">连接</button>
-        <button id="refreshBtn" disabled>刷新画面</button>
     </div>
 
     <!-- 屏幕显示区域 -->
     <div class="item">
-        <label>屏幕画面</label>
+        <label>屏幕画面（点击画面直接选点）</label>
         <div id="screenArea">
             <div id="screenPlaceholder">暂无画面<br>连接后会自动截取一次画面<br>也可点击"刷新画面"手动更新</div>
+            <canvas id="screenPointCanvas"></canvas>
         </div>
     </div>
 
-    <!-- 快捷键快捷按钮 -->
+    <!-- 操作按钮 -->
     <div class="item">
-        <label>快捷键</label>
+        <label>操作</label>
         <div class="shortcut-bar">
+            <button class="shortcut-btn" id="clearMainPointsBtn" disabled>清除选点</button>
+            <button class="shortcut-btn" id="confirmMainPointsBtn" disabled>点击</button>
+            <button class="shortcut-btn" id="dragMainPointsBtn" disabled>拖动</button>
+            <button class="shortcut-btn" data-cmd="stop" disabled>停止</button>
             <button class="shortcut-btn" data-cmd="f1" disabled>F1</button>
             <button class="shortcut-btn" data-cmd="f2" disabled>F2</button>
             <button class="shortcut-btn" data-cmd="f3" disabled>F3</button>
@@ -232,35 +202,16 @@
             <button class="shortcut-btn" data-cmd="f6" disabled>F6</button>
             <button class="shortcut-btn" data-cmd="f7" disabled>F7</button>
             <button class="shortcut-btn" data-cmd="f8" disabled>F8</button>
-        </div>
-        <div class="shortcut-bar" style="margin-top:8px;">
             <button class="shortcut-btn" data-cmd="alt-tab" disabled>Alt+tab</button>
             <button class="shortcut-btn" data-cmd="alt-e" disabled>Alt+e</button>
             <button class="shortcut-btn" data-cmd="alt-s" disabled>Alt+s</button>
-        </div>
-        <div class="shortcut-bar" style="margin-top:8px;">
             <button class="shortcut-btn" data-cmd="enter" disabled>Enter</button>
             <button class="shortcut-btn" data-cmd="esc" disabled>Esc</button>
             <button class="shortcut-btn" data-cmd="ctrl-tab" disabled>Ctrl+tab</button>
-            <button class="shortcut-btn" data-cmd="stop" disabled>Stop</button>
         </div>
     </div>
 
     <div id="statusBar">未连接</div>
-</div>
-
-<!-- 大图弹窗 -->
-<div class="image-modal" id="imageModal">
-    <div class="modal-toolbar">
-        <button id="clearPointsBtn">清除选点</button>
-        <button id="confirmPointsBtn">确认并发送</button>
-        <button id="closeModalBtn">关闭</button>
-    </div>
-    <div class="modal-canvas-wrap">
-        <img id="modalImage" alt="大图预览">
-        <canvas id="pointCanvas"></canvas>
-    </div>
-    <div class="point-info" id="pointInfo">选点：无</div>
 </div>
 
 <script>
@@ -282,6 +233,12 @@
     // 图片显示区域
     const screenArea = document.getElementById('screenArea');
     const screenPlaceholder = document.getElementById('screenPlaceholder');
+    const screenPointCanvas = document.getElementById('screenPointCanvas');
+    const mainCtx = screenPointCanvas.getContext('2d');
+    const clearMainPointsBtn = document.getElementById('clearMainPointsBtn');
+    const confirmMainPointsBtn = document.getElementById('confirmMainPointsBtn');
+    const dragMainPointsBtn = document.getElementById('dragMainPointsBtn');
+    let mainImg = null;
 
     // WebSocket地址历史
     const WS_HISTORY_KEY = 'wsUrlHistory';
@@ -338,16 +295,7 @@
         if(e.key === 'Escape') hideWsHistory();
     });
 
-    // 弹窗相关
-    const imageModal = document.getElementById('imageModal');
-    const modalImage = document.getElementById('modalImage');
-    const pointCanvas = document.getElementById('pointCanvas');
-    const pointCtx = pointCanvas.getContext('2d');
-    const clearPointsBtn = document.getElementById('clearPointsBtn');
-    const confirmPointsBtn = document.getElementById('confirmPointsBtn');
-    const closeModalBtn = document.getElementById('closeModalBtn');
-    const pointInfo = document.getElementById('pointInfo');
-
+    // 选点状态
     let currentImageBlobUrl = null;
     let pointList = []; // {x:像素X,y:像素Y}
 
@@ -368,11 +316,146 @@
             img = document.createElement('img');
             screenArea.appendChild(img);
         }
+        mainImg = img;
         img.src = url;
-        img.onclick = ()=>{
-            openImageModal(url);
+        img.onload = ()=>{
+            positionMainCanvas();
+        };
+        // 点击画面直接选点
+        img.onclick = (e)=>{
+            addPointFromEvent(e);
         };
     }
+
+    // 计算 object-fit:contain 时图片在盒内的实际显示区域
+    function containRect(boxW, boxH, imgW, imgH){
+        const scale = Math.min(boxW / imgW, boxH / imgH);
+        const w = imgW * scale;
+        const h = imgH * scale;
+        return {
+            x: (boxW - w) / 2,
+            y: (boxH - h) / 2,
+            w: w,
+            h: h
+        };
+    }
+
+    // 让选点画布覆盖图片的实际显示区域（对齐 contain 后的图片位置）
+    function positionMainCanvas(){
+        if(!mainImg) return;
+        const imgRect = mainImg.getBoundingClientRect();
+        const areaRect = screenArea.getBoundingClientRect();
+        const c = containRect(imgRect.width, imgRect.height, mainImg.naturalWidth, mainImg.naturalHeight);
+        screenPointCanvas.style.left = (imgRect.left - areaRect.left + c.x) + 'px';
+        screenPointCanvas.style.top = (imgRect.top - areaRect.top + c.y) + 'px';
+        screenPointCanvas.style.width = c.w + 'px';
+        screenPointCanvas.style.height = c.h + 'px';
+        screenPointCanvas.width = mainImg.naturalWidth;
+        screenPointCanvas.height = mainImg.naturalHeight;
+        renderMainPoints();
+    }
+
+    // 主图点击采集坐标（换算为图像原始像素）
+    function addPointFromEvent(e){
+        if(!mainImg) return;
+        const rect = mainImg.getBoundingClientRect();
+        const c = containRect(rect.width, rect.height, mainImg.naturalWidth, mainImg.naturalHeight);
+        const clickX = e.clientX - rect.left - c.x;
+        const clickY = e.clientY - rect.top - c.y;
+        // 点击在 contain 留白处（图片显示区域外）则忽略
+        if(clickX < 0 || clickY < 0 || clickX > c.w || clickY > c.h) return;
+        const px = Math.round(clickX * mainImg.naturalWidth / c.w);
+        const py = Math.round(clickY * mainImg.naturalHeight / c.h);
+        pointList.push({x:px,y:py});
+        renderMainPoints();
+        setStatus('已选点：' + pointList.length);
+        setPointButtonsEnabled(true);
+    }
+
+    // 在主图画布上绘制选点
+    function renderMainPoints(){
+        mainCtx.clearRect(0,0,screenPointCanvas.width,screenPointCanvas.height);
+        mainCtx.fillStyle = "#ff3333";
+        mainCtx.strokeStyle = "#fff";
+        mainCtx.lineWidth = 2;
+        for(const p of pointList){
+            mainCtx.beginPath();
+            mainCtx.arc(p.x,p.y,6,0,Math.PI*2);
+            mainCtx.fill();
+            mainCtx.stroke();
+        }
+    }
+
+    function setPointButtonsEnabled(en){
+        clearMainPointsBtn.disabled = !en;
+        confirmMainPointsBtn.disabled = !en;
+        dragMainPointsBtn.disabled = !en;
+    }
+
+    // 发送"点击"命令：依次移动到每个点并单击
+    function sendPointCommands(){
+        if(pointList.length === 0){
+            alert('还没有选点');
+            return;
+        }
+        if(!ws || ws.readyState !== WebSocket.OPEN){
+            alert('未建立连接');
+            return;
+        }
+        const lines = [];
+        for(const p of pointList){
+            lines.push(`MouseMoveTo ${p.x} ${p.y}`);
+            lines.push('MouseLeftClick');
+        }
+        lines.push('Wait 1');
+        lines.push('Capture screenshot');
+        for(const line of lines){
+            ws.send(line);
+        }
+        setStatus('已发送命令：' + lines.join(', '));
+        pointList = [];
+        renderMainPoints();
+        setPointButtonsEnabled(false);
+    }
+
+    // 发送"拖动"命令：起点按下，沿后续点移动，终点松开
+    function sendPointDragCommands(){
+        if(pointList.length < 2){
+            alert('拖动至少需要 2 个点（起点和终点）');
+            return;
+        }
+        if(!ws || ws.readyState !== WebSocket.OPEN){
+            alert('未建立连接');
+            return;
+        }
+        const lines = [];
+        lines.push(`MouseMoveTo ${pointList[0].x} ${pointList[0].y}`);
+        lines.push('MouseLeftPress');
+        for(let i = 1; i < pointList.length; i++){
+            lines.push(`MouseMoveTo ${pointList[i].x} ${pointList[i].y}`);
+        }
+        lines.push('MouseLeftRelease');
+        lines.push('Wait 1');
+        lines.push('Capture screenshot');
+        for(const line of lines){
+            ws.send(line);
+        }
+        setStatus('已发送命令：' + lines.join(', '));
+        pointList = [];
+        renderMainPoints();
+        setPointButtonsEnabled(false);
+    }
+
+    // 清除选点
+    function clearPoints(){
+        pointList = [];
+        renderMainPoints();
+        setPointButtonsEnabled(false);
+    }
+
+    clearMainPointsBtn.onclick = clearPoints;
+    confirmMainPointsBtn.onclick = sendPointCommands;
+    dragMainPointsBtn.onclick = sendPointDragCommands;
 
     // 发送截图命令
     function sendCapture(){
@@ -405,6 +488,10 @@
     const shortcutBtns = document.querySelectorAll('.shortcut-btn');
     function setShortcutEnabled(enabled){
         for(const b of shortcutBtns){
+            // 选点相关按钮（清除/点击/拖动）由选点状态单独控制，不随连接状态启停
+            if(b === clearMainPointsBtn || b === confirmMainPointsBtn || b === dragMainPointsBtn){
+                continue;
+            }
             b.disabled = !enabled;
         }
     }
@@ -425,96 +512,6 @@
             sendShortcut(btn.dataset.cmd);
         });
     });
-
-    // 打开大图弹窗
-    function openImageModal(blobUrl){
-        modalImage.src = blobUrl;
-        pointList = [];
-        imageModal.style.display = 'flex';
-        // 图片加载完成后设置canvas尺寸
-        modalImage.onload = function(){
-            pointCanvas.width = modalImage.naturalWidth;
-            pointCanvas.height = modalImage.naturalHeight;
-            pointCanvas.style.width = modalImage.offsetWidth + 'px';
-            pointCanvas.style.height = modalImage.offsetHeight + 'px';
-            renderPoints();
-            updatePointInfo();
-        }
-    }
-
-    // 绘制标记点
-    function renderPoints(){
-        pointCtx.clearRect(0,0,pointCanvas.width,pointCanvas.height);
-        pointCtx.fillStyle = "#ff3333";
-        pointCtx.strokeStyle = "#fff";
-        pointCtx.lineWidth = 2;
-        for(const p of pointList){
-            pointCtx.beginPath();
-            pointCtx.arc(p.x,p.y,6,0,Math.PI*2);
-            pointCtx.fill();
-            pointCtx.stroke();
-        }
-    }
-
-    function updatePointInfo(){
-        if(pointList.length === 0){
-            pointInfo.innerText = "选点：无";
-        }else{
-            pointInfo.innerText = "选点坐标：" + JSON.stringify(pointList);
-        }
-    }
-
-    // 大图点击采集坐标
-    modalImage.addEventListener('click',(e)=>{
-        const rect = modalImage.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const clickY = e.clientY - rect.top;
-        const scaleX = modalImage.naturalWidth / rect.width;
-        const scaleY = modalImage.naturalHeight / rect.height;
-        const px = Math.round(clickX * scaleX);
-        const py = Math.round(clickY * scaleY);
-        pointList.push({x:px,y:py});
-        renderPoints();
-        updatePointInfo();
-    })
-
-    clearPointsBtn.onclick = ()=>{
-        pointList = [];
-        renderPoints();
-        updatePointInfo();
-    }
-
-    confirmPointsBtn.onclick = ()=>{
-        if(pointList.length === 0){
-            alert("还没有选点");
-            return;
-        }
-        if(!ws || ws.readyState !== WebSocket.OPEN){
-            alert('未建立连接');
-            return;
-        }
-        // 根据选点生成命令并直接发送
-        const lines = [];
-        for(const p of pointList){
-            lines.push(`MouseMoveTo ${p.x} ${p.y}`);
-            lines.push('MouseLeftClick');
-        }
-        // 自动刷新一次画面
-        lines.push('Wait 1');
-        lines.push('Capture screenshot');
-        for(const line of lines){
-            ws.send(line);
-        }
-        setStatus('已发送命令：' + lines.join(', '));
-        pointList = [];
-        renderPoints();
-        updatePointInfo();
-        imageModal.style.display = 'none';
-    }
-
-    closeModalBtn.onclick = ()=>{
-        imageModal.style.display = 'none';
-    }
 
     connectBtn.addEventListener('click',()=>{
         if(ws){
@@ -563,6 +560,7 @@
             connectBtn.classList.remove('disconnect');
             refreshBtn.disabled = true;
             setShortcutEnabled(false);
+            setPointButtonsEnabled(false);
         }
     });
 

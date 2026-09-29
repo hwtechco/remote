@@ -19,12 +19,26 @@
         .container {
             background: #fff;
             width: 100%;
-            min-height: 100vh;
-            padding: 20px 24px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 16px 24px;
             box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            overflow: auto;
         }
         .item {
-            margin-bottom: 16px;
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+        /* 屏幕画面区域：弹性占满剩余高度 */
+        .screen-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 200px;
+        }
+        .screen-item label {
+            flex-shrink: 0;
         }
         label {
             display: block;
@@ -125,7 +139,8 @@
         /* 图片显示区域 */
         #screenArea {
             width: 100%;
-            height: 600px;
+            flex: 1;
+            min-height: 0;
             border: 2px dashed #d0d7de;
             border-radius: 8px;
             background-color: #fafafa;
@@ -160,6 +175,7 @@
             color: #888;
             margin-top: 10px;
             min-height: 18px;
+            flex-shrink: 0;
         }
     </style>
 </head>
@@ -178,7 +194,7 @@
     </div>
 
     <!-- 屏幕显示区域 -->
-    <div class="item">
+    <div class="item screen-item">
         <label>屏幕画面（点击画面直接选点）</label>
         <div id="screenArea">
             <div id="screenPlaceholder">暂无画面<br>连接后会自动截取一次画面<br>也可点击"刷新画面"手动更新</div>
@@ -354,6 +370,11 @@
         screenPointCanvas.height = mainImg.naturalHeight;
         renderMainPoints();
     }
+
+    // 窗口尺寸变化时重算画布位置（画面区域高度随视口变化）
+    window.addEventListener('resize', ()=>{
+        positionMainCanvas();
+    });
 
     // 主图点击采集坐标（换算为图像原始像素）
     function addPointFromEvent(e){

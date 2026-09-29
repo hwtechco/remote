@@ -38,6 +38,41 @@
             border-radius: 6px;
             font-size: 14px;
         }
+        /* WebSocket地址历史下拉 */
+        .ws-wrap {
+            position: relative;
+        }
+        .ws-history {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+            max-height: 240px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+        .ws-history-item {
+            padding: 8px 12px;
+            font-size: 13px;
+            color: #333;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ws-history-item:hover {
+            background-color: #f0f2f5;
+        }
+        .ws-history-empty {
+            padding: 8px 12px;
+            font-size: 13px;
+            color: #999;
+        }
         button {
             padding: 9px 18px;
             border: none;
@@ -166,8 +201,11 @@
 <body>
 <div class="container">
     <div class="item">
-        <label>WebSocket地址(ws:// 或 wss://)</label>
-        <input id="wsUrl" type="text">
+        <label>WebSocket地址</label>
+        <div class="ws-wrap">
+            <input id="wsUrl" type="text" autocomplete="off">
+            <div id="wsHistory" class="ws-history"></div>
+        </div>
     </div>
     <div class="item" style="display:flex; gap:10px; align-items:center;">
         <button id="connectBtn">连接</button>
@@ -186,14 +224,6 @@
     <div class="item">
         <label>快捷键</label>
         <div class="shortcut-bar">
-            <button class="shortcut-btn" data-cmd="enter" disabled>Enter</button>
-            <button class="shortcut-btn" data-cmd="esc" disabled>Esc</button>
-            <button class="shortcut-btn" data-cmd="ctrl-tab" disabled>Ctrl+tab</button>
-            <button class="shortcut-btn" data-cmd="alt-tab" disabled>Alt+tab</button>
-            <button class="shortcut-btn" data-cmd="alt-e" disabled>Alt+e</button>
-            <button class="shortcut-btn" data-cmd="alt-s" disabled>Alt+s</button>
-        </div>
-        <div class="shortcut-bar" style="margin-top:8px;">
             <button class="shortcut-btn" data-cmd="f1" disabled>F1</button>
             <button class="shortcut-btn" data-cmd="f2" disabled>F2</button>
             <button class="shortcut-btn" data-cmd="f3" disabled>F3</button>
@@ -202,6 +232,16 @@
             <button class="shortcut-btn" data-cmd="f6" disabled>F6</button>
             <button class="shortcut-btn" data-cmd="f7" disabled>F7</button>
             <button class="shortcut-btn" data-cmd="f8" disabled>F8</button>
+        </div>
+        <div class="shortcut-bar" style="margin-top:8px;">
+            <button class="shortcut-btn" data-cmd="alt-tab" disabled>Alt+tab</button>
+            <button class="shortcut-btn" data-cmd="alt-e" disabled>Alt+e</button>
+            <button class="shortcut-btn" data-cmd="alt-s" disabled>Alt+s</button>
+        </div>
+        <div class="shortcut-bar" style="margin-top:8px;">
+            <button class="shortcut-btn" data-cmd="enter" disabled>Enter</button>
+            <button class="shortcut-btn" data-cmd="esc" disabled>Esc</button>
+            <button class="shortcut-btn" data-cmd="ctrl-tab" disabled>Ctrl+tab</button>
         </div>
     </div>
 
@@ -229,9 +269,73 @@
     const refreshBtn = document.getElementById('refreshBtn');
     const statusBar = document.getElementById('statusBar');
 
+    // 从 URL 查询参数读取 ws 地址并填入输入框
+    (function(){
+        const params = new URLSearchParams(location.search);
+        const urlFromParam = params.get('ws');
+        if(urlFromParam){
+            wsUrlInput.value = urlFromParam.trim();
+        }
+    })();
+
     // 图片显示区域
     const screenArea = document.getElementById('screenArea');
     const screenPlaceholder = document.getElementById('screenPlaceholder');
+
+    // WebSocket地址历史
+    const WS_HISTORY_KEY = 'wsUrlHistory';
+    const wsHistory = document.getElementById('wsHistory');
+    function loadWsHistory(){
+        try{
+            return JSON.parse(localStorage.getItem(WS_HISTORY_KEY)) || [];
+        }catch(e){
+            return [];
+        }
+    }
+    function addWsHistory(url){
+        let list = loadWsHistory().filter(u => u !== url);
+        list.unshift(url);
+        localStorage.setItem(WS_HISTORY_KEY, JSON.stringify(list.slice(0, 10)));
+    }
+    function renderWsHistory(){
+        wsHistory.innerHTML = '';
+        const list = loadWsHistory();
+        if(list.length === 0){
+            const empty = document.createElement('div');
+            empty.className = 'ws-history-empty';
+            empty.textContent = '暂无历史地址';
+            wsHistory.appendChild(empty);
+            return;
+        }
+        for(const url of list){
+            const item = document.createElement('div');
+            item.className = 'ws-history-item';
+            item.textContent = url;
+            item.title = url;
+            // 防止点击时触发 input 的 blur 提前隐藏下拉
+            item.addEventListener('mousedown',(e)=> e.preventDefault());
+            item.addEventListener('click',()=>{
+                wsUrlInput.value = url;
+                hideWsHistory();
+                wsUrlInput.focus();
+            });
+            wsHistory.appendChild(item);
+        }
+    }
+    function showWsHistory(){
+        renderWsHistory();
+        wsHistory.style.display = 'block';
+    }
+    function hideWsHistory(){
+        wsHistory.style.display = 'none';
+    }
+    wsUrlInput.addEventListener('focus', showWsHistory);
+    wsUrlInput.addEventListener('blur', ()=>{
+        setTimeout(hideWsHistory, 150);
+    });
+    wsUrlInput.addEventListener('keydown',(e)=>{
+        if(e.key === 'Escape') hideWsHistory();
+    });
 
     // 弹窗相关
     const imageModal = document.getElementById('imageModal');
@@ -430,6 +534,8 @@
 
         ws.onopen = ()=>{
             setStatus('✅ WebSocket连接成功，正在截取画面...');
+            // 连接成功即保存地址到历史
+            addWsHistory(url);
             // 连接成功即可使用刷新按钮和快捷键
             refreshBtn.disabled = false;
             setShortcutEnabled(true);

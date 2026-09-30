@@ -209,6 +209,7 @@
             <button class="shortcut-btn" id="clearMainPointsBtn" disabled>清除选点</button>
             <button class="shortcut-btn" id="confirmMainPointsBtn" disabled>点击</button>
             <button class="shortcut-btn" id="dragMainPointsBtn" disabled>拖动</button>
+            <button class="shortcut-btn" data-cmd="start" disabled>开始</button>
             <button class="shortcut-btn" data-cmd="stop" disabled>停止</button>
             <button class="shortcut-btn" data-cmd="f1" disabled>F1</button>
             <button class="shortcut-btn" data-cmd="f2" disabled>F2</button>
@@ -493,6 +494,7 @@
         'enter':     ['KeyboardWrite enter', 'Wait 1', 'Capture screenshot'],
         'esc':       ['KeyboardWrite esc', 'Wait 1', 'Capture screenshot'],
         'ctrl-tab':  ['KeyboardPress ctrl', 'KeyboardWrite tab', 'KeyboardRelease ctrl', 'Wait 1', 'Capture screenshot'],
+        'start':     ['Start', 'Wait 1', 'Capture screenshot'],
         'stop':      ['Stop', 'Wait 1', 'Capture screenshot'],
         'alt-tab':   ['KeyboardPress alt', 'KeyboardWrite tab', 'KeyboardRelease alt', 'Wait 1', 'Capture screenshot'],
         'alt-e':     ['KeyboardPress alt', 'KeyboardWrite e', 'KeyboardRelease alt', 'Wait 1', 'Capture screenshot'],

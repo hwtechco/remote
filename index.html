@@ -152,21 +152,11 @@
             position: relative;
             padding: 0;
         }
-        /* 缩放平移舞台 */
-        #stage {
-            position: absolute;
-            inset: 0;
-            transform-origin: 0 0;
-            touch-action: none;
-            overflow: hidden;
-        }
-        #stage img {
+        #screenArea img {
             width: 100%;
             height: 100%;
             object-fit: contain;
             display: block;
-            -webkit-user-drag: none;
-            user-select: none;
         }
         #screenPointCanvas {
             position: absolute;
@@ -179,8 +169,6 @@
             padding: 40px 0;
             text-align: center;
             line-height: 1.8;
-            position: relative;
-            z-index: 3;
         }
         #statusBar {
             font-size: 13px;
@@ -207,12 +195,10 @@
 
     <!-- 屏幕显示区域 -->
     <div class="item screen-item">
-        <label>屏幕画面（点击选点，双指捏合缩放/拖动平移，滚轮缩放，双击重置）</label>
+        <label>屏幕画面（点击画面直接选点）</label>
         <div id="screenArea">
             <div id="screenPlaceholder">暂无画面<br>连接后会自动截取一次画面<br>也可点击"刷新画面"手动更新</div>
-            <div id="stage">
-                <canvas id="screenPointCanvas"></canvas>
-            </div>
+            <canvas id="screenPointCanvas"></canvas>
         </div>
     </div>
 
@@ -264,88 +250,12 @@
     // 图片显示区域
     const screenArea = document.getElementById('screenArea');
     const screenPlaceholder = document.getElementById('screenPlaceholder');
-    const stage = document.getElementById('stage');
     const screenPointCanvas = document.getElementById('screenPointCanvas');
     const mainCtx = screenPointCanvas.getContext('2d');
     const clearMainPointsBtn = document.getElementById('clearMainPointsBtn');
     const confirmMainPointsBtn = document.getElementById('confirmMainPointsBtn');
     const dragMainPointsBtn = document.getElementById('dragMainPointsBtn');
     let mainImg = null;
-
-    // 缩放平移状态（transform: translate(tx,ty) scale(s)，origin 0 0）
-    let zoomState = { s: 1, tx: 0, ty: 0 };
-    const MIN_SCALE = 1;
-    const MAX_SCALE = 6;
-    function applyTransform(){
-        stage.style.transform = `translate(${zoomState.tx}px, ${zoomState.ty}px) scale(${zoomState.s})`;
-    }
-    function resetZoom(){
-        zoomState.s = 1;
-        zoomState.tx = 0;
-        zoomState.ty = 0;
-        applyTransform();
-    }
-    // 以屏幕上某点(相对画面区)为锚点缩放，保持该点位置不动
-    function zoomAt(anchorX, anchorY, newS){
-        newS = Math.min(MAX_SCALE, Math.max(MIN_SCALE, newS));
-        const s = zoomState.s;
-        const px = (anchorX - zoomState.tx) / s;
-        const py = (anchorY - zoomState.ty) / s;
-        zoomState.tx = anchorX - newS * px;
-        zoomState.ty = anchorY - newS * py;
-        zoomState.s = newS;
-        applyTransform();
-    }
-    // 双指缩放 + 平移
-    let pinch = null;
-    stage.addEventListener('touchstart',(e)=>{
-        if(e.touches.length === 2){
-            e.preventDefault();
-            const rect = screenArea.getBoundingClientRect();
-            const [a,b] = e.touches;
-            pinch = {
-                startDist: Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY),
-                startS: zoomState.s,
-                lastCx: (a.clientX+b.clientX)/2 - rect.left,
-                lastCy: (a.clientY+b.clientY)/2 - rect.top
-            };
-        }
-    },{passive:false});
-    stage.addEventListener('touchmove',(e)=>{
-        if(e.touches.length === 2 && pinch){
-            e.preventDefault();
-            const rect = screenArea.getBoundingClientRect();
-            const [a,b] = e.touches;
-            const dist = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
-            const cx = (a.clientX+b.clientX)/2 - rect.left;
-            const cy = (a.clientY+b.clientY)/2 - rect.top;
-            const newS = Math.min(MAX_SCALE, Math.max(MIN_SCALE, pinch.startS * (dist / pinch.startDist)));
-            // 以上一帧中心为锚点缩放，保持该点不动
-            zoomAt(pinch.lastCx, pinch.lastCy, newS);
-            // 双指整体移动 = 平移
-            zoomState.tx += (cx - pinch.lastCx);
-            zoomState.ty += (cy - pinch.lastCy);
-            applyTransform();
-            pinch.lastCx = cx;
-            pinch.lastCy = cy;
-        }
-    },{passive:false});
-    stage.addEventListener('touchend',(e)=>{
-        if(e.touches.length < 2) pinch = null;
-    });
-    // 鼠标滚轮缩放（围绕光标位置）
-    stage.addEventListener('wheel',(e)=>{
-        e.preventDefault();
-        const rect = screenArea.getBoundingClientRect();
-        const cx = e.clientX - rect.left;
-        const cy = e.clientY - rect.top;
-        const factor = e.deltaY < 0 ? 1.15 : 1/1.15;
-        zoomAt(cx, cy, zoomState.s * factor);
-    },{passive:false});
-    // 双击重置
-    stage.addEventListener('dblclick',()=>{
-        resetZoom();
-    });
 
     // WebSocket地址历史
     const WS_HISTORY_KEY = 'wsUrlHistory';
@@ -418,10 +328,10 @@
         }
         currentImageBlobUrl = url;
         screenPlaceholder.style.display = 'none';
-        let img = stage.querySelector('img');
+        let img = screenArea.querySelector('img');
         if(!img){
             img = document.createElement('img');
-            stage.appendChild(img);
+            screenArea.appendChild(img);
         }
         mainImg = img;
         img.src = url;
@@ -447,13 +357,14 @@
         };
     }
 
-    // 让选点画布覆盖图片的实际显示区域（stage 未缩放坐标系）
+    // 让选点画布覆盖图片的实际显示区域（对齐 contain 后的图片位置）
     function positionMainCanvas(){
         if(!mainImg) return;
+        const imgRect = mainImg.getBoundingClientRect();
         const areaRect = screenArea.getBoundingClientRect();
-        const c = containRect(areaRect.width, areaRect.height, mainImg.naturalWidth, mainImg.naturalHeight);
-        screenPointCanvas.style.left = c.x + 'px';
-        screenPointCanvas.style.top = c.y + 'px';
+        const c = containRect(imgRect.width, imgRect.height, mainImg.naturalWidth, mainImg.naturalHeight);
+        screenPointCanvas.style.left = (imgRect.left - areaRect.left + c.x) + 'px';
+        screenPointCanvas.style.top = (imgRect.top - areaRect.top + c.y) + 'px';
         screenPointCanvas.style.width = c.w + 'px';
         screenPointCanvas.style.height = c.h + 'px';
         screenPointCanvas.width = mainImg.naturalWidth;
@@ -466,21 +377,17 @@
         positionMainCanvas();
     });
 
-    // 主图点击采集坐标（屏幕坐标 → stage 未缩放坐标 → 图片原始像素）
+    // 主图点击采集坐标（换算为图像原始像素）
     function addPointFromEvent(e){
         if(!mainImg) return;
-        const rect = screenArea.getBoundingClientRect();
-        const sx = e.clientX - rect.left;
-        const sy = e.clientY - rect.top;
-        const x0 = (sx - zoomState.tx) / zoomState.s;
-        const y0 = (sy - zoomState.ty) / zoomState.s;
+        const rect = mainImg.getBoundingClientRect();
         const c = containRect(rect.width, rect.height, mainImg.naturalWidth, mainImg.naturalHeight);
-        const imgX = x0 - c.x;
-        const imgY = y0 - c.y;
-        // 点击在图片显示区域外则忽略
-        if(imgX < 0 || imgY < 0 || imgX > c.w || imgY > c.h) return;
-        const px = Math.round(imgX * mainImg.naturalWidth / c.w);
-        const py = Math.round(imgY * mainImg.naturalHeight / c.h);
+        const clickX = e.clientX - rect.left - c.x;
+        const clickY = e.clientY - rect.top - c.y;
+        // 点击在 contain 留白处（图片显示区域外）则忽略
+        if(clickX < 0 || clickY < 0 || clickX > c.w || clickY > c.h) return;
+        const px = Math.round(clickX * mainImg.naturalWidth / c.w);
+        const py = Math.round(clickY * mainImg.naturalHeight / c.h);
         pointList.push({x:px,y:py});
         renderMainPoints();
         setStatus('已选点：' + pointList.length);
@@ -584,10 +491,10 @@
 
     // 快捷键命令映射（每条命令独立发送）
     const shortcutMap = {
-        'start':     ['Start', 'Wait 1', 'Capture screenshot'],
         'enter':     ['KeyboardWrite enter', 'Wait 1', 'Capture screenshot'],
         'esc':       ['KeyboardWrite esc', 'Wait 1', 'Capture screenshot'],
         'ctrl-tab':  ['KeyboardPress ctrl', 'KeyboardWrite tab', 'KeyboardRelease ctrl', 'Wait 1', 'Capture screenshot'],
+        'start':     ['Start', 'Wait 1', 'Capture screenshot'],
         'stop':      ['Stop', 'Wait 1', 'Capture screenshot'],
         'alt-tab':   ['KeyboardPress alt', 'KeyboardWrite tab', 'KeyboardRelease alt', 'Wait 1', 'Capture screenshot'],
         'alt-e':     ['KeyboardPress alt', 'KeyboardWrite e', 'KeyboardRelease alt', 'Wait 1', 'Capture screenshot'],

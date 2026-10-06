@@ -30,12 +30,10 @@
             margin-bottom: 12px;
             flex-shrink: 0;
         }
-        /* 屏幕画面区域：弹性占满剩余高度 */
+        /* 屏幕画面区域：宽度占满，高度按 16:9 比例 */
         .screen-item {
-            flex: 1;
             display: flex;
             flex-direction: column;
-            min-height: 200px;
         }
         .screen-item label {
             flex-shrink: 0;
@@ -139,8 +137,7 @@
         /* 图片显示区域 */
         #screenArea {
             width: 100%;
-            flex: 1;
-            min-height: 0;
+            aspect-ratio: 16 / 9;
             border: 2px dashed #d0d7de;
             border-radius: 8px;
             background-color: #fafafa;

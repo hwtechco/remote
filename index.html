@@ -833,7 +833,18 @@
             setStatus('❌ 发生错误:' + err);
         };
         ws.onclose = (e)=>{
-            setStatus(`🔌 连接关闭 code:${e.code} reason:${e.reason}`);
+            // 按关闭码给出友好提示（1006 异常断开无 reason，单独处理）
+            let msg;
+            if(e.code === 1006){
+                msg = '🔌 连接中断（服务器无响应 / 网络断开）';
+            }else if(e.code === 1000){
+                msg = '🔌 连接已正常关闭';
+            }else if(e.reason){
+                msg = `🔌 连接关闭 code:${e.code} reason:${e.reason}`;
+            }else{
+                msg = `🔌 连接关闭 code:${e.code}`;
+            }
+            setStatus(msg);
             ws = null;
             connectBtn.textContent = '连接';
             connectBtn.classList.remove('disconnect');

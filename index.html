@@ -99,14 +99,6 @@
         #connectBtn.disconnect {
             background-color: #f5222d;
         }
-        #refreshBtn {
-            background-color: #1677ff;
-            color: white;
-        }
-        #refreshBtn:disabled {
-            background-color: #a5c6ff;
-            cursor: not-allowed;
-        }
         /* 操作小按钮 */
         .shortcut-bar {
             display: flex;
@@ -202,6 +194,12 @@
         .kb-key:active {
             background: #cfd4dc;
         }
+        /* 切换键按下状态（Alt 等） */
+        .kb-key.kb-pressed {
+            background: #c9d0da;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.25);
+            color: #111;
+        }
         /* 宽键按真实键盘比例（单位数） */
         .kb-w-15 { flex-grow: 1.5; }
         .kb-w-175 { flex-grow: 1.75; }
@@ -245,7 +243,6 @@
                 <div id="wsHistory" class="ws-history"></div>
             </div>
             <button id="connectBtn">连接</button>
-            <button id="refreshBtn" disabled>刷新画面</button>
         </div>
     </div>
 
@@ -262,6 +259,7 @@
     <div class="item">
         <label>操作</label>
         <div class="shortcut-bar">
+            <button class="shortcut-btn" id="refreshBtn" disabled>刷新画面</button>
             <button class="shortcut-btn" id="clearMainPointsBtn" disabled>清除选点</button>
             <button class="shortcut-btn" id="confirmMainPointsBtn" disabled>左键点击</button>
             <button class="shortcut-btn" id="confirmMainPointsRightBtn" disabled>右键点击</button>
@@ -269,20 +267,6 @@
             <button class="shortcut-btn" id="dragMainPointsRightBtn" disabled>右键拖动</button>
             <button class="shortcut-btn" data-cmd="start" disabled>开始</button>
             <button class="shortcut-btn" data-cmd="stop" disabled>停止</button>
-            <button class="shortcut-btn" data-cmd="f1" disabled>F1</button>
-            <button class="shortcut-btn" data-cmd="f2" disabled>F2</button>
-            <button class="shortcut-btn" data-cmd="f3" disabled>F3</button>
-            <button class="shortcut-btn" data-cmd="f4" disabled>F4</button>
-            <button class="shortcut-btn" data-cmd="f5" disabled>F5</button>
-            <button class="shortcut-btn" data-cmd="f6" disabled>F6</button>
-            <button class="shortcut-btn" data-cmd="f7" disabled>F7</button>
-            <button class="shortcut-btn" data-cmd="f8" disabled>F8</button>
-            <button class="shortcut-btn" data-cmd="alt-tab" disabled>Alt+tab</button>
-            <button class="shortcut-btn" data-cmd="alt-e" disabled>Alt+e</button>
-            <button class="shortcut-btn" data-cmd="alt-s" disabled>Alt+s</button>
-            <button class="shortcut-btn" data-cmd="enter" disabled>Enter</button>
-            <button class="shortcut-btn" data-cmd="esc" disabled>Esc</button>
-            <button class="shortcut-btn" data-cmd="ctrl-tab" disabled>Ctrl+tab</button>
         </div>
     </div>
 
@@ -290,79 +274,79 @@
         <label>键盘</label>
         <div class="keyboard">
             <div class="kb-row kb-fn-row">
-                <button class="kb-key">Esc</button>
+                <button class="kb-key" data-key="esc">Esc</button>
                 <span class="kb-fn-gap"></span>
-                <button class="kb-key">F1</button>
-                <button class="kb-key">F2</button>
-                <button class="kb-key">F3</button>
-                <button class="kb-key">F4</button>
+                <button class="kb-key" data-key="f1">F1</button>
+                <button class="kb-key" data-key="f2">F2</button>
+                <button class="kb-key" data-key="f3">F3</button>
+                <button class="kb-key" data-key="f4">F4</button>
                 <span class="kb-fn-gap"></span>
-                <button class="kb-key">F5</button>
-                <button class="kb-key">F6</button>
-                <button class="kb-key">F7</button>
-                <button class="kb-key">F8</button>
+                <button class="kb-key" data-key="f5">F5</button>
+                <button class="kb-key" data-key="f6">F6</button>
+                <button class="kb-key" data-key="f7">F7</button>
+                <button class="kb-key" data-key="f8">F8</button>
                 <span class="kb-fn-gap"></span>
-                <button class="kb-key">F9</button>
-                <button class="kb-key">F10</button>
-                <button class="kb-key">F11</button>
-                <button class="kb-key">F12</button>
+                <button class="kb-key" data-key="f9">F9</button>
+                <button class="kb-key" data-key="f10">F10</button>
+                <button class="kb-key" data-key="f11">F11</button>
+                <button class="kb-key" data-key="f12">F12</button>
             </div>
             <div class="kb-row r1">
                 <button class="kb-key">`</button>
-                <button class="kb-key">1</button>
-                <button class="kb-key">2</button>
-                <button class="kb-key">3</button>
-                <button class="kb-key">4</button>
-                <button class="kb-key">5</button>
-                <button class="kb-key">6</button>
-                <button class="kb-key">7</button>
-                <button class="kb-key">8</button>
-                <button class="kb-key">9</button>
-                <button class="kb-key">0</button>
+                <button class="kb-key" data-key="1">1</button>
+                <button class="kb-key" data-key="2">2</button>
+                <button class="kb-key" data-key="3">3</button>
+                <button class="kb-key" data-key="4">4</button>
+                <button class="kb-key" data-key="5">5</button>
+                <button class="kb-key" data-key="6">6</button>
+                <button class="kb-key" data-key="7">7</button>
+                <button class="kb-key" data-key="8">8</button>
+                <button class="kb-key" data-key="9">9</button>
+                <button class="kb-key" data-key="0">0</button>
                 <button class="kb-key">-</button>
                 <button class="kb-key">=</button>
                 <button class="kb-key kb-w-2">Bksp</button>
             </div>
             <div class="kb-row r2">
-                <button class="kb-key kb-w-15">Tab</button>
-                <button class="kb-key">Q</button>
-                <button class="kb-key">W</button>
-                <button class="kb-key">E</button>
-                <button class="kb-key">R</button>
-                <button class="kb-key">T</button>
-                <button class="kb-key">Y</button>
-                <button class="kb-key">U</button>
-                <button class="kb-key">I</button>
-                <button class="kb-key">O</button>
-                <button class="kb-key">P</button>
+                <button class="kb-key kb-w-15" data-key="tab">Tab</button>
+                <button class="kb-key" data-key="q">Q</button>
+                <button class="kb-key" data-key="w">W</button>
+                <button class="kb-key" data-key="e">E</button>
+                <button class="kb-key" data-key="r">R</button>
+                <button class="kb-key" data-key="t">T</button>
+                <button class="kb-key" data-key="y">Y</button>
+                <button class="kb-key" data-key="u">U</button>
+                <button class="kb-key" data-key="i">I</button>
+                <button class="kb-key" data-key="o">O</button>
+                <button class="kb-key" data-key="p">P</button>
                 <button class="kb-key">[</button>
                 <button class="kb-key">]</button>
                 <button class="kb-key kb-w-15">\</button>
             </div>
             <div class="kb-row r3">
                 <button class="kb-key kb-w-175">Caps</button>
-                <button class="kb-key">A</button>
-                <button class="kb-key">S</button>
-                <button class="kb-key">D</button>
-                <button class="kb-key">F</button>
-                <button class="kb-key">G</button>
-                <button class="kb-key">H</button>
-                <button class="kb-key">J</button>
-                <button class="kb-key">K</button>
-                <button class="kb-key">L</button>
+                <button class="kb-key" data-key="a">A</button>
+                <button class="kb-key" data-key="s">S</button>
+                <button class="kb-key" data-key="d">D</button>
+                <button class="kb-key" data-key="f">F</button>
+                <button class="kb-key" data-key="g">G</button>
+                <button class="kb-key" data-key="h">H</button>
+                <button class="kb-key" data-key="j">J</button>
+                <button class="kb-key" data-key="k">K</button>
+                <button class="kb-key" data-key="l">L</button>
                 <button class="kb-key">;</button>
                 <button class="kb-key">'</button>
-                <button class="kb-key kb-w-225">Enter</button>
+                <button class="kb-key kb-w-225" data-key="enter">Enter</button>
             </div>
             <div class="kb-row r4">
                 <button class="kb-key kb-w-225">Shift</button>
-                <button class="kb-key">Z</button>
-                <button class="kb-key">X</button>
-                <button class="kb-key">C</button>
-                <button class="kb-key">V</button>
-                <button class="kb-key">B</button>
-                <button class="kb-key">N</button>
-                <button class="kb-key">M</button>
+                <button class="kb-key" data-key="z">Z</button>
+                <button class="kb-key" data-key="x">X</button>
+                <button class="kb-key" data-key="c">C</button>
+                <button class="kb-key" data-key="v">V</button>
+                <button class="kb-key" data-key="b">B</button>
+                <button class="kb-key" data-key="n">N</button>
+                <button class="kb-key" data-key="m">M</button>
                 <button class="kb-key">,</button>
                 <button class="kb-key">.</button>
                 <button class="kb-key">/</button>
@@ -371,9 +355,9 @@
             <div class="kb-row r5">
                 <button class="kb-key kb-w-15">Ctrl</button>
                 <button class="kb-key kb-w-15">Win</button>
-                <button class="kb-key kb-w-15">Alt</button>
+                <button class="kb-key kb-w-15 kb-toggle">Alt</button>
                 <button class="kb-key kb-w-6">空格</button>
-                <button class="kb-key kb-w-15">Alt</button>
+                <button class="kb-key kb-w-15 kb-toggle">Alt</button>
                 <button class="kb-key kb-w-15">Win</button>
                 <button class="kb-key kb-w-15">Menu</button>
                 <button class="kb-key kb-w-15">Ctrl</button>
@@ -746,6 +730,35 @@
     shortcutBtns.forEach((btn)=>{
         btn.addEventListener('click',()=>{
             sendShortcut(btn.dataset.cmd);
+        });
+    });
+
+    // 虚拟键盘按键：点击发送 KeyboardWrite <键值>
+    document.querySelectorAll('.keyboard .kb-key[data-key]').forEach((k)=>{
+        k.addEventListener('click',()=>{
+            const key = k.dataset.key;
+            if(!ws || ws.readyState !== WebSocket.OPEN){
+                alert('未建立连接');
+                return;
+            }
+            ws.send('KeyboardWrite ' + key);
+            setStatus('已发送 KeyboardWrite ' + key);
+        });
+    });
+
+    // 虚拟键盘切换键（Alt）：点击按下/松开，发送 KeyboardPress/KeyboardRelease
+    document.querySelectorAll('.keyboard .kb-toggle').forEach((k)=>{
+        let pressed = false;
+        k.addEventListener('click',()=>{
+            if(!ws || ws.readyState !== WebSocket.OPEN){
+                alert('未建立连接');
+                return;
+            }
+            pressed = !pressed;
+            k.classList.toggle('kb-pressed', pressed);
+            const cmd = pressed ? 'KeyboardPress alt' : 'KeyboardRelease alt';
+            ws.send(cmd);
+            setStatus('已发送 ' + cmd);
         });
     });
 

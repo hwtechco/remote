@@ -103,8 +103,7 @@
         .shortcut-bar {
             display: flex;
             gap: 8px;
-            flex-wrap: nowrap;
-            overflow-x: auto;
+            flex-wrap: wrap;
             padding-bottom: 4px;
         }
         .shortcut-btn {
@@ -231,15 +230,58 @@
             min-height: 18px;
             flex-shrink: 0;
         }
+        /* 移动端适配 */
+        @media (max-width: 760px) {
+            .container {
+                padding: 10px 10px 16px;
+                overflow-y: auto;
+            }
+            .item {
+                margin-bottom: 10px;
+            }
+            input[type="text"] {
+                font-size: 16px;
+                padding: 8px 10px;
+            }
+            .shortcut-bar {
+                gap: 6px;
+            }
+            .shortcut-btn {
+                padding: 6px 10px;
+                font-size: 12px;
+            }
+            .keyboard {
+                padding: 6px;
+                border-radius: 6px;
+            }
+            .kb-row {
+                gap: 3px;
+                margin-bottom: 4px;
+            }
+            .kb-key {
+                height: 30px;
+                font-size: 11px;
+                border-radius: 4px;
+            }
+            .kb-fn-row {
+                margin-bottom: 5px;
+            }
+            .kb-fn-row .kb-key {
+                height: 26px;
+                font-size: 10px;
+            }
+            #statusBar {
+                font-size: 12px;
+            }
+        }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="item">
-        <label>WebSocket地址</label>
         <div style="display:flex; gap:10px; align-items:center;">
             <div class="ws-wrap" style="flex:1; min-width:0;">
-                <input id="wsUrl" type="text" autocomplete="off">
+                <input id="wsUrl" type="text" autocomplete="off" placeholder="WebSocket地址">
                 <div id="wsHistory" class="ws-history"></div>
             </div>
             <button id="connectBtn">连接</button>
@@ -248,16 +290,14 @@
 
     <!-- 屏幕显示区域 -->
     <div class="item screen-item">
-        <label>屏幕画面</label>
         <div id="screenArea">
-            <div id="screenPlaceholder">暂无画面</div>
+            <div id="screenPlaceholder">屏幕画面</div>
             <canvas id="screenPointCanvas"></canvas>
         </div>
     </div>
 
     <!-- 操作按钮 -->
     <div class="item">
-        <label>操作</label>
         <div class="shortcut-bar">
             <button class="shortcut-btn" id="refreshBtn" disabled>刷新画面</button>
             <button class="shortcut-btn" id="clearMainPointsBtn" disabled>清除选点</button>
@@ -265,27 +305,23 @@
             <button class="shortcut-btn" id="confirmMainPointsRightBtn" disabled>右键点击</button>
             <button class="shortcut-btn" id="dragMainPointsBtn" disabled>左键拖动</button>
             <button class="shortcut-btn" id="dragMainPointsRightBtn" disabled>右键拖动</button>
-            <button class="shortcut-btn" data-cmd="start" disabled>开始</button>
-            <button class="shortcut-btn" data-cmd="stop" disabled>停止</button>
+            <button class="shortcut-btn" data-cmd="Start" disabled>开始任务</button>
+            <button class="shortcut-btn" data-cmd="Stop" disabled>停止任务</button>
         </div>
     </div>
 
     <div class="item">
-        <label>键盘</label>
         <div class="keyboard">
             <div class="kb-row kb-fn-row">
                 <button class="kb-key" data-key="esc">Esc</button>
-                <span class="kb-fn-gap"></span>
                 <button class="kb-key" data-key="f1">F1</button>
                 <button class="kb-key" data-key="f2">F2</button>
                 <button class="kb-key" data-key="f3">F3</button>
                 <button class="kb-key" data-key="f4">F4</button>
-                <span class="kb-fn-gap"></span>
                 <button class="kb-key" data-key="f5">F5</button>
                 <button class="kb-key" data-key="f6">F6</button>
                 <button class="kb-key" data-key="f7">F7</button>
                 <button class="kb-key" data-key="f8">F8</button>
-                <span class="kb-fn-gap"></span>
                 <button class="kb-key" data-key="f9">F9</button>
                 <button class="kb-key" data-key="f10">F10</button>
                 <button class="kb-key" data-key="f11">F11</button>
@@ -305,7 +341,7 @@
                 <button class="kb-key" data-key="0">0</button>
                 <button class="kb-key">-</button>
                 <button class="kb-key">=</button>
-                <button class="kb-key kb-w-2">Bksp</button>
+                <button class="kb-key kb-w-2" data-key="backspace">⌫</button>
             </div>
             <div class="kb-row r2">
                 <button class="kb-key kb-w-15" data-key="tab">Tab</button>
@@ -324,7 +360,7 @@
                 <button class="kb-key kb-w-15">\</button>
             </div>
             <div class="kb-row r3">
-                <button class="kb-key kb-w-175">Caps</button>
+                <button class="kb-key kb-w-175" data-key="caps">Caps</button>
                 <button class="kb-key" data-key="a">A</button>
                 <button class="kb-key" data-key="s">S</button>
                 <button class="kb-key" data-key="d">D</button>
@@ -353,14 +389,13 @@
                 <button class="kb-key kb-w-275">Shift</button>
             </div>
             <div class="kb-row r5">
-                <button class="kb-key kb-w-15">Ctrl</button>
-                <button class="kb-key kb-w-15">Win</button>
-                <button class="kb-key kb-w-15 kb-toggle">Alt</button>
-                <button class="kb-key kb-w-6">空格</button>
-                <button class="kb-key kb-w-15 kb-toggle">Alt</button>
-                <button class="kb-key kb-w-15">Win</button>
-                <button class="kb-key kb-w-15">Menu</button>
-                <button class="kb-key kb-w-15">Ctrl</button>
+                <button class="kb-key kb-w-15 kb-toggle" data-key="ctrl">Ctrl</button>
+                <button class="kb-key kb-w-15" data-key="win">Win</button>
+                <button class="kb-key kb-w-15 kb-toggle" data-key="alt">Alt</button>
+                <button class="kb-key kb-w-6" data-key="space">Space</button>
+                <button class="kb-key kb-w-15 kb-toggle" data-key="alt">Alt</button>
+                <button class="kb-key kb-w-15" data-key="win">Win</button>
+                <button class="kb-key kb-w-15 kb-toggle" data-key="ctrl">Ctrl</button>
             </div>
         </div>
     </div>
@@ -555,6 +590,21 @@
         dragMainPointsRightBtn.disabled = !en;
     }
 
+    // 断开连接后恢复画面区域的初始状态（占位提示 + 清空选点）
+    function resetScreen(){
+        if(currentImageBlobUrl){
+            URL.revokeObjectURL(currentImageBlobUrl);
+            currentImageBlobUrl = null;
+        }
+        mainImg = null;
+        pointList = [];
+        const img = screenArea.querySelector('img');
+        if(img) img.remove();
+        mainCtx.clearRect(0,0,screenPointCanvas.width,screenPointCanvas.height);
+        screenPlaceholder.style.display = '';
+        setPointButtonsEnabled(false);
+    }
+
     // 发送"点击"命令：依次移动到每个点并单击
     function sendPointCommands(){
         if(pointList.length === 0){
@@ -687,24 +737,6 @@
     }
 
     // 快捷键命令映射（每条命令独立发送）
-    const shortcutMap = {
-        'enter':     ['KeyboardWrite enter', 'Wait 1', 'Capture'],
-        'esc':       ['KeyboardWrite esc', 'Wait 1', 'Capture'],
-        'ctrl-tab':  ['KeyboardPress ctrl', 'KeyboardWrite tab', 'KeyboardRelease ctrl', 'Wait 1', 'Capture'],
-        'start':     ['Start', 'Wait 1', 'Capture'],
-        'stop':      ['Stop', 'Wait 1', 'Capture'],
-        'alt-tab':   ['KeyboardPress alt', 'KeyboardWrite tab', 'KeyboardRelease alt', 'Wait 1', 'Capture'],
-        'alt-e':     ['KeyboardPress alt', 'KeyboardWrite e', 'KeyboardRelease alt', 'Wait 1', 'Capture'],
-        'alt-s':     ['KeyboardPress alt', 'KeyboardWrite s', 'KeyboardRelease alt', 'Wait 1', 'Capture'],
-        'f1':        ['KeyboardWrite f1', 'Wait 1', 'Capture'],
-        'f2':        ['KeyboardWrite f2', 'Wait 1', 'Capture'],
-        'f3':        ['KeyboardWrite f3', 'Wait 1', 'Capture'],
-        'f4':        ['KeyboardWrite f4', 'Wait 1', 'Capture'],
-        'f5':        ['KeyboardWrite f5', 'Wait 1', 'Capture'],
-        'f6':        ['KeyboardWrite f6', 'Wait 1', 'Capture'],
-        'f7':        ['KeyboardWrite f7', 'Wait 1', 'Capture'],
-        'f8':        ['KeyboardWrite f8', 'Wait 1', 'Capture'],
-    };
     const shortcutBtns = document.querySelectorAll('.shortcut-btn');
     function setShortcutEnabled(enabled){
         for(const b of shortcutBtns){
@@ -715,26 +747,23 @@
             b.disabled = !enabled;
         }
     }
-    function sendShortcut(cmd){
-        const lines = shortcutMap[cmd];
-        if(!lines) return;
+    function sendCommand(cmd){
+        if(!cmd) return;
         if(!ws || ws.readyState !== WebSocket.OPEN){
             alert('未建立连接');
             return;
         }
-        for(const line of lines){
-            ws.send(line);
-        }
-        setStatus('已发送命令：' + lines.join(', '));
+        ws.send(cmd);
+        setStatus('已发送命令：' + cmd);
     }
     shortcutBtns.forEach((btn)=>{
         btn.addEventListener('click',()=>{
-            sendShortcut(btn.dataset.cmd);
+            sendCommand(btn.dataset.cmd);
         });
     });
 
-    // 虚拟键盘按键：点击发送 KeyboardWrite <键值>
-    document.querySelectorAll('.keyboard .kb-key[data-key]').forEach((k)=>{
+    // 虚拟键盘按键：点击发送 KeyboardWrite <键值>（排除 toggle 切换键）
+    document.querySelectorAll('.keyboard .kb-key[data-key]:not(.kb-toggle)').forEach((k)=>{
         k.addEventListener('click',()=>{
             const key = k.dataset.key;
             if(!ws || ws.readyState !== WebSocket.OPEN){
@@ -746,7 +775,7 @@
         });
     });
 
-    // 虚拟键盘切换键（Alt）：点击按下/松开，发送 KeyboardPress/KeyboardRelease
+    // 虚拟键盘切换键（Alt/Ctrl）：点击按下/松开，发送 KeyboardPress/KeyboardRelease <键值>
     document.querySelectorAll('.keyboard .kb-toggle').forEach((k)=>{
         let pressed = false;
         k.addEventListener('click',()=>{
@@ -754,9 +783,10 @@
                 alert('未建立连接');
                 return;
             }
+            const key = k.dataset.key;
             pressed = !pressed;
             k.classList.toggle('kb-pressed', pressed);
-            const cmd = pressed ? 'KeyboardPress alt' : 'KeyboardRelease alt';
+            const cmd = pressed ? `KeyboardPress ${key}` : `KeyboardRelease ${key}`;
             ws.send(cmd);
             setStatus('已发送 ' + cmd);
         });
@@ -810,6 +840,7 @@
             refreshBtn.disabled = true;
             setShortcutEnabled(false);
             setPointButtonsEnabled(false);
+            resetScreen();
         }
     });
 

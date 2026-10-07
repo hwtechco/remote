@@ -167,6 +167,65 @@
             text-align: center;
             line-height: 1.8;
         }
+        /* 虚拟键盘（仅样式，暂无逻辑） */
+        .keyboard {
+            width: 100%;
+            background: #e9ecf1;
+            border: 1px solid #d0d7de;
+            border-radius: 8px;
+            padding: 10px;
+            user-select: none;
+        }
+        .kb-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+        .kb-row:last-child {
+            margin-bottom: 0;
+        }
+        .kb-key {
+            flex: 1 1 0;
+            height: 40px;
+            border: 1px solid #b6bcc6;
+            border-radius: 5px;
+            background: linear-gradient(#ffffff, #eceef2);
+            font-size: 13px;
+            color: #333;
+            cursor: pointer;
+            padding: 0;
+            box-shadow: 0 1px 1px rgba(0,0,0,0.15);
+        }
+        .kb-key:hover {
+            background: linear-gradient(#ffffff, #dfe3e9);
+        }
+        .kb-key:active {
+            background: #cfd4dc;
+        }
+        /* 宽键按真实键盘比例（单位数） */
+        .kb-w-15 { flex-grow: 1.5; }
+        .kb-w-175 { flex-grow: 1.75; }
+        .kb-w-2 { flex-grow: 2; }
+        .kb-w-225 { flex-grow: 2.25; }
+        .kb-w-275 { flex-grow: 2.75; }
+        .kb-w-6 { flex-grow: 6; }
+        .kb-rows { font-size: 12px; }
+        /* 各行起始缩进，模拟真实键盘键位错开 */
+        .kb-row.r2 { padding-left: 0; }
+        .kb-row.r3 { padding-left: 0; }
+        .kb-row.r4 { padding-left: 0; }
+        .kb-row.r5 { padding-left: 0; }
+        /* 功能键行 */
+        .kb-fn-row {
+            margin-bottom: 8px;
+        }
+        .kb-fn-row .kb-key {
+            height: 34px;
+            font-size: 12px;
+        }
+        .kb-fn-gap {
+            flex: 0.5 1 0;
+        }
         #statusBar {
             font-size: 13px;
             color: #888;
@@ -224,6 +283,101 @@
             <button class="shortcut-btn" data-cmd="enter" disabled>Enter</button>
             <button class="shortcut-btn" data-cmd="esc" disabled>Esc</button>
             <button class="shortcut-btn" data-cmd="ctrl-tab" disabled>Ctrl+tab</button>
+        </div>
+    </div>
+
+    <div class="item">
+        <label>键盘</label>
+        <div class="keyboard">
+            <div class="kb-row kb-fn-row">
+                <button class="kb-key">Esc</button>
+                <span class="kb-fn-gap"></span>
+                <button class="kb-key">F1</button>
+                <button class="kb-key">F2</button>
+                <button class="kb-key">F3</button>
+                <button class="kb-key">F4</button>
+                <span class="kb-fn-gap"></span>
+                <button class="kb-key">F5</button>
+                <button class="kb-key">F6</button>
+                <button class="kb-key">F7</button>
+                <button class="kb-key">F8</button>
+                <span class="kb-fn-gap"></span>
+                <button class="kb-key">F9</button>
+                <button class="kb-key">F10</button>
+                <button class="kb-key">F11</button>
+                <button class="kb-key">F12</button>
+            </div>
+            <div class="kb-row r1">
+                <button class="kb-key">`</button>
+                <button class="kb-key">1</button>
+                <button class="kb-key">2</button>
+                <button class="kb-key">3</button>
+                <button class="kb-key">4</button>
+                <button class="kb-key">5</button>
+                <button class="kb-key">6</button>
+                <button class="kb-key">7</button>
+                <button class="kb-key">8</button>
+                <button class="kb-key">9</button>
+                <button class="kb-key">0</button>
+                <button class="kb-key">-</button>
+                <button class="kb-key">=</button>
+                <button class="kb-key kb-w-2">Bksp</button>
+            </div>
+            <div class="kb-row r2">
+                <button class="kb-key kb-w-15">Tab</button>
+                <button class="kb-key">Q</button>
+                <button class="kb-key">W</button>
+                <button class="kb-key">E</button>
+                <button class="kb-key">R</button>
+                <button class="kb-key">T</button>
+                <button class="kb-key">Y</button>
+                <button class="kb-key">U</button>
+                <button class="kb-key">I</button>
+                <button class="kb-key">O</button>
+                <button class="kb-key">P</button>
+                <button class="kb-key">[</button>
+                <button class="kb-key">]</button>
+                <button class="kb-key kb-w-15">\</button>
+            </div>
+            <div class="kb-row r3">
+                <button class="kb-key kb-w-175">Caps</button>
+                <button class="kb-key">A</button>
+                <button class="kb-key">S</button>
+                <button class="kb-key">D</button>
+                <button class="kb-key">F</button>
+                <button class="kb-key">G</button>
+                <button class="kb-key">H</button>
+                <button class="kb-key">J</button>
+                <button class="kb-key">K</button>
+                <button class="kb-key">L</button>
+                <button class="kb-key">;</button>
+                <button class="kb-key">'</button>
+                <button class="kb-key kb-w-225">Enter</button>
+            </div>
+            <div class="kb-row r4">
+                <button class="kb-key kb-w-225">Shift</button>
+                <button class="kb-key">Z</button>
+                <button class="kb-key">X</button>
+                <button class="kb-key">C</button>
+                <button class="kb-key">V</button>
+                <button class="kb-key">B</button>
+                <button class="kb-key">N</button>
+                <button class="kb-key">M</button>
+                <button class="kb-key">,</button>
+                <button class="kb-key">.</button>
+                <button class="kb-key">/</button>
+                <button class="kb-key kb-w-275">Shift</button>
+            </div>
+            <div class="kb-row r5">
+                <button class="kb-key kb-w-15">Ctrl</button>
+                <button class="kb-key kb-w-15">Win</button>
+                <button class="kb-key kb-w-15">Alt</button>
+                <button class="kb-key kb-w-6">空格</button>
+                <button class="kb-key kb-w-15">Alt</button>
+                <button class="kb-key kb-w-15">Win</button>
+                <button class="kb-key kb-w-15">Menu</button>
+                <button class="kb-key kb-w-15">Ctrl</button>
+            </div>
         </div>
     </div>
 

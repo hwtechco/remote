@@ -125,6 +125,15 @@
             color: #999;
             cursor: not-allowed;
         }
+        /* 鼠标移动坐标输入框 */
+        .move-bar input[type="number"] {
+            width: 70px;
+            padding: 4px 8px;
+            font-size: 12px;
+            border: 1px solid #d0d7de;
+            border-radius: 5px;
+            flex-shrink: 0;
+        }
         /* 图片显示区域 */
         #screenArea {
             width: 100%;
@@ -310,6 +319,15 @@
         </div>
     </div>
 
+    <!-- 鼠标移动（手动填坐标） -->
+    <div class="item">
+        <div class="shortcut-bar move-bar">
+            <input type="number" id="moveX" placeholder="X" min="0">
+            <input type="number" id="moveY" placeholder="Y" min="0">
+            <button class="shortcut-btn" id="moveBtn" disabled>鼠标移动</button>
+        </div>
+    </div>
+
     <div class="item">
         <div class="keyboard">
             <div class="kb-row kb-fn-row">
@@ -429,6 +447,9 @@
     const confirmMainPointsRightBtn = document.getElementById('confirmMainPointsRightBtn');
     const dragMainPointsBtn = document.getElementById('dragMainPointsBtn');
     const dragMainPointsRightBtn = document.getElementById('dragMainPointsRightBtn');
+    const moveX = document.getElementById('moveX');
+    const moveY = document.getElementById('moveY');
+    const moveBtn = document.getElementById('moveBtn');
     let mainImg = null;
 
     // WebSocket地址历史
@@ -620,8 +641,6 @@
             lines.push(`MouseMoveTo ${p.x} ${p.y}`);
             lines.push('MouseLeftClick');
         }
-        lines.push('Wait 1');
-        lines.push('Capture');
         for(const line of lines){
             ws.send(line);
         }
@@ -646,8 +665,6 @@
             lines.push(`MouseMoveTo ${p.x} ${p.y}`);
             lines.push('MouseRightClick');
         }
-        lines.push('Wait 1');
-        lines.push('Capture');
         for(const line of lines){
             ws.send(line);
         }
@@ -674,8 +691,6 @@
             lines.push(`MouseMoveTo ${pointList[i].x} ${pointList[i].y}`);
         }
         lines.push('MouseLeftRelease');
-        lines.push('Wait 1');
-        lines.push('Capture');
         for(const line of lines){
             ws.send(line);
         }
@@ -702,8 +717,6 @@
             lines.push(`MouseMoveTo ${pointList[i].x} ${pointList[i].y}`);
         }
         lines.push('MouseRightRelease');
-        lines.push('Wait 1');
-        lines.push('Capture');
         for(const line of lines){
             ws.send(line);
         }
@@ -725,6 +738,22 @@
     confirmMainPointsRightBtn.onclick = sendPointRightCommands;
     dragMainPointsBtn.onclick = sendPointDragCommands;
     dragMainPointsRightBtn.onclick = sendPointRightDragCommands;
+
+    // 手动填坐标移动鼠标
+    moveBtn.addEventListener('click',()=>{
+        if(!ws || ws.readyState !== WebSocket.OPEN){
+            alert('未建立连接');
+            return;
+        }
+        const x = parseInt(moveX.value, 10);
+        const y = parseInt(moveY.value, 10);
+        if(isNaN(x) || isNaN(y) || x < 0 || y < 0){
+            alert('请输入有效的 x、y 坐标');
+            return;
+        }
+        ws.send(`MouseMoveTo ${x} ${y}`);
+        setStatus(`已发送 MouseMoveTo ${x} ${y}`);
+    });
 
     // 发送截图命令
     function sendCapture(){
@@ -811,14 +840,12 @@
         setShortcutEnabled(false);
 
         ws.onopen = ()=>{
-            setStatus('✅ WebSocket连接成功，正在截取画面...');
+            setStatus('✅ WebSocket连接成功');
             // 连接成功即保存地址到历史
             addWsHistory(url);
             // 连接成功即可使用刷新按钮和快捷键
             refreshBtn.disabled = false;
             setShortcutEnabled(true);
-            // 连接成功后自动发送一次 Capture 更新图片
-            ws.send('Capture');
         };
         ws.onmessage = (evt)=>{
             if(evt.data instanceof Blob){

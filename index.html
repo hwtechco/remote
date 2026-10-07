@@ -192,9 +192,9 @@
 
     <!-- 屏幕显示区域 -->
     <div class="item screen-item">
-        <label>屏幕画面（点击画面直接选点）</label>
+        <label>屏幕画面</label>
         <div id="screenArea">
-            <div id="screenPlaceholder">暂无画面<br>连接后会自动截取一次画面<br>也可点击"刷新画面"手动更新</div>
+            <div id="screenPlaceholder">暂无画面</div>
             <canvas id="screenPointCanvas"></canvas>
         </div>
     </div>
@@ -204,8 +204,10 @@
         <label>操作</label>
         <div class="shortcut-bar">
             <button class="shortcut-btn" id="clearMainPointsBtn" disabled>清除选点</button>
-            <button class="shortcut-btn" id="confirmMainPointsBtn" disabled>点击</button>
-            <button class="shortcut-btn" id="dragMainPointsBtn" disabled>拖动</button>
+            <button class="shortcut-btn" id="confirmMainPointsBtn" disabled>左键点击</button>
+            <button class="shortcut-btn" id="confirmMainPointsRightBtn" disabled>右键点击</button>
+            <button class="shortcut-btn" id="dragMainPointsBtn" disabled>左键拖动</button>
+            <button class="shortcut-btn" id="dragMainPointsRightBtn" disabled>右键拖动</button>
             <button class="shortcut-btn" data-cmd="start" disabled>开始</button>
             <button class="shortcut-btn" data-cmd="stop" disabled>停止</button>
             <button class="shortcut-btn" data-cmd="f1" disabled>F1</button>
@@ -251,7 +253,9 @@
     const mainCtx = screenPointCanvas.getContext('2d');
     const clearMainPointsBtn = document.getElementById('clearMainPointsBtn');
     const confirmMainPointsBtn = document.getElementById('confirmMainPointsBtn');
+    const confirmMainPointsRightBtn = document.getElementById('confirmMainPointsRightBtn');
     const dragMainPointsBtn = document.getElementById('dragMainPointsBtn');
+    const dragMainPointsRightBtn = document.getElementById('dragMainPointsRightBtn');
     let mainImg = null;
 
     // WebSocket地址历史
@@ -408,7 +412,9 @@
     function setPointButtonsEnabled(en){
         clearMainPointsBtn.disabled = !en;
         confirmMainPointsBtn.disabled = !en;
+        confirmMainPointsRightBtn.disabled = !en;
         dragMainPointsBtn.disabled = !en;
+        dragMainPointsRightBtn.disabled = !en;
     }
 
     // 发送"点击"命令：依次移动到每个点并单击
@@ -427,7 +433,33 @@
             lines.push('MouseLeftClick');
         }
         lines.push('Wait 1');
-        lines.push('Capture screenshot');
+        lines.push('Capture');
+        for(const line of lines){
+            ws.send(line);
+        }
+        setStatus('已发送命令：' + lines.join(', '));
+        pointList = [];
+        renderMainPoints();
+        setPointButtonsEnabled(false);
+    }
+
+    // 发送"右键点击"命令：与左键一致，仅 MouseLeftClick 换为 MouseRightClick
+    function sendPointRightCommands(){
+        if(pointList.length === 0){
+            alert('还没有选点');
+            return;
+        }
+        if(!ws || ws.readyState !== WebSocket.OPEN){
+            alert('未建立连接');
+            return;
+        }
+        const lines = [];
+        for(const p of pointList){
+            lines.push(`MouseMoveTo ${p.x} ${p.y}`);
+            lines.push('MouseRightClick');
+        }
+        lines.push('Wait 1');
+        lines.push('Capture');
         for(const line of lines){
             ws.send(line);
         }
@@ -455,7 +487,35 @@
         }
         lines.push('MouseLeftRelease');
         lines.push('Wait 1');
-        lines.push('Capture screenshot');
+        lines.push('Capture');
+        for(const line of lines){
+            ws.send(line);
+        }
+        setStatus('已发送命令：' + lines.join(', '));
+        pointList = [];
+        renderMainPoints();
+        setPointButtonsEnabled(false);
+    }
+
+    // 发送"右键拖动"命令：与左键一致，仅 MouseLeft 换为 MouseRight
+    function sendPointRightDragCommands(){
+        if(pointList.length < 2){
+            alert('拖动至少需要 2 个点（起点和终点）');
+            return;
+        }
+        if(!ws || ws.readyState !== WebSocket.OPEN){
+            alert('未建立连接');
+            return;
+        }
+        const lines = [];
+        lines.push(`MouseMoveTo ${pointList[0].x} ${pointList[0].y}`);
+        lines.push('MouseRightPress');
+        for(let i = 1; i < pointList.length; i++){
+            lines.push(`MouseMoveTo ${pointList[i].x} ${pointList[i].y}`);
+        }
+        lines.push('MouseRightRelease');
+        lines.push('Wait 1');
+        lines.push('Capture');
         for(const line of lines){
             ws.send(line);
         }
@@ -474,7 +534,9 @@
 
     clearMainPointsBtn.onclick = clearPoints;
     confirmMainPointsBtn.onclick = sendPointCommands;
+    confirmMainPointsRightBtn.onclick = sendPointRightCommands;
     dragMainPointsBtn.onclick = sendPointDragCommands;
+    dragMainPointsRightBtn.onclick = sendPointRightDragCommands;
 
     // 发送截图命令
     function sendCapture(){
@@ -482,34 +544,34 @@
             alert('未建立连接');
             return;
         }
-        ws.send('Capture screenshot');
-        setStatus('已发送 Capture screenshot');
+        ws.send('Capture');
+        setStatus('已发送 Capture');
     }
 
     // 快捷键命令映射（每条命令独立发送）
     const shortcutMap = {
-        'enter':     ['KeyboardWrite enter', 'Wait 1', 'Capture screenshot'],
-        'esc':       ['KeyboardWrite esc', 'Wait 1', 'Capture screenshot'],
-        'ctrl-tab':  ['KeyboardPress ctrl', 'KeyboardWrite tab', 'KeyboardRelease ctrl', 'Wait 1', 'Capture screenshot'],
-        'start':     ['Start', 'Wait 1', 'Capture screenshot'],
-        'stop':      ['Stop', 'Wait 1', 'Capture screenshot'],
-        'alt-tab':   ['KeyboardPress alt', 'KeyboardWrite tab', 'KeyboardRelease alt', 'Wait 1', 'Capture screenshot'],
-        'alt-e':     ['KeyboardPress alt', 'KeyboardWrite e', 'KeyboardRelease alt', 'Wait 1', 'Capture screenshot'],
-        'alt-s':     ['KeyboardPress alt', 'KeyboardWrite s', 'KeyboardRelease alt', 'Wait 1', 'Capture screenshot'],
-        'f1':        ['KeyboardWrite f1', 'Wait 1', 'Capture screenshot'],
-        'f2':        ['KeyboardWrite f2', 'Wait 1', 'Capture screenshot'],
-        'f3':        ['KeyboardWrite f3', 'Wait 1', 'Capture screenshot'],
-        'f4':        ['KeyboardWrite f4', 'Wait 1', 'Capture screenshot'],
-        'f5':        ['KeyboardWrite f5', 'Wait 1', 'Capture screenshot'],
-        'f6':        ['KeyboardWrite f6', 'Wait 1', 'Capture screenshot'],
-        'f7':        ['KeyboardWrite f7', 'Wait 1', 'Capture screenshot'],
-        'f8':        ['KeyboardWrite f8', 'Wait 1', 'Capture screenshot'],
+        'enter':     ['KeyboardWrite enter', 'Wait 1', 'Capture'],
+        'esc':       ['KeyboardWrite esc', 'Wait 1', 'Capture'],
+        'ctrl-tab':  ['KeyboardPress ctrl', 'KeyboardWrite tab', 'KeyboardRelease ctrl', 'Wait 1', 'Capture'],
+        'start':     ['Start', 'Wait 1', 'Capture'],
+        'stop':      ['Stop', 'Wait 1', 'Capture'],
+        'alt-tab':   ['KeyboardPress alt', 'KeyboardWrite tab', 'KeyboardRelease alt', 'Wait 1', 'Capture'],
+        'alt-e':     ['KeyboardPress alt', 'KeyboardWrite e', 'KeyboardRelease alt', 'Wait 1', 'Capture'],
+        'alt-s':     ['KeyboardPress alt', 'KeyboardWrite s', 'KeyboardRelease alt', 'Wait 1', 'Capture'],
+        'f1':        ['KeyboardWrite f1', 'Wait 1', 'Capture'],
+        'f2':        ['KeyboardWrite f2', 'Wait 1', 'Capture'],
+        'f3':        ['KeyboardWrite f3', 'Wait 1', 'Capture'],
+        'f4':        ['KeyboardWrite f4', 'Wait 1', 'Capture'],
+        'f5':        ['KeyboardWrite f5', 'Wait 1', 'Capture'],
+        'f6':        ['KeyboardWrite f6', 'Wait 1', 'Capture'],
+        'f7':        ['KeyboardWrite f7', 'Wait 1', 'Capture'],
+        'f8':        ['KeyboardWrite f8', 'Wait 1', 'Capture'],
     };
     const shortcutBtns = document.querySelectorAll('.shortcut-btn');
     function setShortcutEnabled(enabled){
         for(const b of shortcutBtns){
             // 选点相关按钮（清除/点击/拖动）由选点状态单独控制，不随连接状态启停
-            if(b === clearMainPointsBtn || b === confirmMainPointsBtn || b === dragMainPointsBtn){
+            if(b === clearMainPointsBtn || b === confirmMainPointsBtn || b === confirmMainPointsRightBtn || b === dragMainPointsBtn || b === dragMainPointsRightBtn){
                 continue;
             }
             b.disabled = !enabled;
@@ -558,8 +620,8 @@
             // 连接成功即可使用刷新按钮和快捷键
             refreshBtn.disabled = false;
             setShortcutEnabled(true);
-            // 连接成功后自动发送一次 Capture screenshot 更新图片
-            ws.send('Capture screenshot');
+            // 连接成功后自动发送一次 Capture 更新图片
+            ws.send('Capture');
         };
         ws.onmessage = (evt)=>{
             if(evt.data instanceof Blob){

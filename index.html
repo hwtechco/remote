@@ -645,6 +645,7 @@
             ws.send(line);
         }
         setStatus('已发送命令：' + lines.join(', '));
+        ws.send('Capture');
         pointList = [];
         renderMainPoints();
         setPointButtonsEnabled(false);
@@ -669,6 +670,7 @@
             ws.send(line);
         }
         setStatus('已发送命令：' + lines.join(', '));
+        ws.send('Capture');
         pointList = [];
         renderMainPoints();
         setPointButtonsEnabled(false);
@@ -695,6 +697,7 @@
             ws.send(line);
         }
         setStatus('已发送命令：' + lines.join(', '));
+        ws.send('Capture');
         pointList = [];
         renderMainPoints();
         setPointButtonsEnabled(false);
@@ -721,6 +724,7 @@
             ws.send(line);
         }
         setStatus('已发送命令：' + lines.join(', '));
+        ws.send('Capture');
         pointList = [];
         renderMainPoints();
         setPointButtonsEnabled(false);
@@ -753,6 +757,7 @@
         }
         ws.send(`MouseMoveTo ${x} ${y}`);
         setStatus(`已发送 MouseMoveTo ${x} ${y}`);
+        ws.send('Capture');
     });
 
     // 发送截图命令
@@ -784,6 +789,7 @@
         }
         ws.send(cmd);
         setStatus('已发送命令：' + cmd);
+        ws.send('Capture');
     }
     shortcutBtns.forEach((btn)=>{
         btn.addEventListener('click',()=>{
@@ -801,6 +807,7 @@
             }
             ws.send('KeyboardWrite ' + key);
             setStatus('已发送 KeyboardWrite ' + key);
+            ws.send('Capture');
         });
     });
 
@@ -818,6 +825,9 @@
             const cmd = pressed ? `KeyboardPress ${key}` : `KeyboardRelease ${key}`;
             ws.send(cmd);
             setStatus('已发送 ' + cmd);
+            if (!pressed){
+                ws.send('Capture');
+            }
         });
     });
 
@@ -841,6 +851,7 @@
 
         ws.onopen = ()=>{
             setStatus('✅ WebSocket连接成功');
+            ws.send('Capture');
             // 连接成功即保存地址到历史
             addWsHistory(url);
             // 连接成功即可使用刷新按钮和快捷键

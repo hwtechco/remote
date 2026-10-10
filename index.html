@@ -316,6 +316,7 @@
             <button class="shortcut-btn" id="dragMainPointsRightBtn" disabled>右键拖动</button>
             <button class="shortcut-btn" data-cmd="Start" disabled>开始任务</button>
             <button class="shortcut-btn" data-cmd="Stop" disabled>停止任务</button>
+            <button class="shortcut-btn" data-cmd="Shutdown" disabled>关机</button>
         </div>
     </div>
 
@@ -793,7 +794,14 @@
     }
     shortcutBtns.forEach((btn)=>{
         btn.addEventListener('click',()=>{
-            sendCommand(btn.dataset.cmd);
+            const cmd = btn.dataset.cmd;
+            // 关机属高风险操作，需二次确认避免误点
+            if(cmd === 'Shutdown'){
+                if(!confirm('确定要执行关机吗？')){
+                    return;
+                }
+            }
+            sendCommand(cmd);
         });
     });
 

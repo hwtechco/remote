@@ -797,6 +797,9 @@
         });
     });
 
+    // 当前处于按下状态的切换键数量（决定普通键是否额外发送 Capture）
+    let togglePressedCount = 0;
+
     // 虚拟键盘按键：点击发送 KeyboardWrite <键值>（排除 toggle 切换键）
     document.querySelectorAll('.keyboard .kb-key[data-key]:not(.kb-toggle)').forEach((k)=>{
         k.addEventListener('click',()=>{
@@ -807,7 +810,10 @@
             }
             ws.send('KeyboardWrite ' + key);
             setStatus('已发送 KeyboardWrite ' + key);
-            ws.send('Capture');
+            // 无切换键按下时才刷新画面；组合键（如 Alt+E）按下期间不额外截图
+            if(togglePressedCount === 0){
+                ws.send('Capture');
+            }
         });
     });
 
@@ -825,6 +831,11 @@
             const cmd = pressed ? `KeyboardPress ${key}` : `KeyboardRelease ${key}`;
             ws.send(cmd);
             setStatus('已发送 ' + cmd);
+            if (pressed){
+                togglePressedCount++;
+            }else{
+                if(togglePressedCount > 0) togglePressedCount--;
+            }
             if (!pressed){
                 ws.send('Capture');
             }

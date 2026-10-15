@@ -315,6 +315,9 @@
             <button class="shortcut-btn" id="confirmMainPointsRightBtn" disabled>右键点击</button>
             <button class="shortcut-btn" id="dragMainPointsBtn" disabled>左键拖动</button>
             <button class="shortcut-btn" id="dragMainPointsRightBtn" disabled>右键拖动</button>
+            <button class="shortcut-btn" data-broadcast="start" disabled>开始任务</button>
+            <button class="shortcut-btn" data-broadcast="stop" disabled>停止任务</button>
+            <button class="shortcut-btn" data-broadcast="shutdown" disabled>关机</button>
         </div>
     </div>
 
@@ -618,6 +621,13 @@
         dragMainPointsRightBtn.disabled = !en;
     }
 
+    // 控制"操作类"按钮（刷新画面 / 鼠标移动 / 广播按钮）的启停
+    function setActionButtonsEnabled(en){
+        refreshBtn.disabled = !en;
+        moveBtn.disabled = !en;
+        document.querySelectorAll('.shortcut-btn[data-broadcast]').forEach((b)=> b.disabled = !en);
+    }
+
     // 断开连接后恢复画面区域的初始状态（占位提示 + 清空选点）
     function resetScreen(){
         if(currentImageBlobUrl){
@@ -670,10 +680,13 @@
             authed = true;
             clearTimeout(authTimer);
             setStatus('✅ 鉴权成功，WebSocket 就绪');
-            refreshBtn.disabled = false;
-            moveBtn.disabled = false;
+            setActionButtonsEnabled(true);
             addWsHistory(wsUrlInput.value.trim());
             rpc('graphic.capture'); // 连接成功后抓一帧
+            return;
+        }
+        if(obj.type === 'broadcast'){
+            setStatus('收到广播：' + obj.data);
             return;
         }
         if(obj.error){
@@ -784,6 +797,20 @@
     dragMainPointsBtn.onclick = sendPointDragCommands;
     dragMainPointsRightBtn.onclick = sendPointRightDragCommands;
 
+    // 广播按钮（开始/停止/关机）：调用 broadcast RPC 广播对应消息
+    document.querySelectorAll('.shortcut-btn[data-broadcast]').forEach((b)=>{
+        b.addEventListener('click',()=>{
+            const data = b.dataset.broadcast;
+            if(!authed){ alert('未完成连接'); return; }
+            // 关机属高风险操作，需二次确认避免误点
+            if(data === 'shutdown' && !confirm('确定要执行关机吗？')){
+                return;
+            }
+            rpc('broadcast', {data: data});
+            setStatus('已广播：' + data);
+        });
+    });
+
     // 手动填坐标移动鼠标
     moveBtn.addEventListener('click',()=>{
         if(!authed){ alert('未完成连接'); return; }
@@ -860,8 +887,7 @@
 
         connectBtn.textContent = '断开';
         connectBtn.classList.add('disconnect');
-        refreshBtn.disabled = true;
-        moveBtn.disabled = true;
+        setActionButtonsEnabled(false);
         setPointButtonsEnabled(false);
 
         ws.onopen = ()=>{
@@ -912,8 +938,7 @@
             ws = null;
             connectBtn.textContent = '连接';
             connectBtn.classList.remove('disconnect');
-            refreshBtn.disabled = true;
-            moveBtn.disabled = true;
+            setActionButtonsEnabled(false);
             setPointButtonsEnabled(false);
             resetScreen();
         }

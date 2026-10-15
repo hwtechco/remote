@@ -293,6 +293,7 @@
                 <input id="wsUrl" type="text" autocomplete="off" placeholder="WebSocket地址">
                 <div id="wsHistory" class="ws-history"></div>
             </div>
+            <input id="wsToken" type="text" autocomplete="off" style="width:150px; flex-shrink:0;" placeholder="Token">
             <button id="connectBtn">连接</button>
         </div>
     </div>
@@ -314,9 +315,6 @@
             <button class="shortcut-btn" id="confirmMainPointsRightBtn" disabled>右键点击</button>
             <button class="shortcut-btn" id="dragMainPointsBtn" disabled>左键拖动</button>
             <button class="shortcut-btn" id="dragMainPointsRightBtn" disabled>右键拖动</button>
-            <button class="shortcut-btn" data-cmd="Start" disabled>开始任务</button>
-            <button class="shortcut-btn" data-cmd="Stop" disabled>停止任务</button>
-            <button class="shortcut-btn" data-cmd="Shutdown" disabled>关机</button>
         </div>
     </div>
 
@@ -424,17 +422,25 @@
 
 <script>
     let ws = null;
+    let seq = 0;          // 请求自增 id
+    let authed = false;   // 是否通过鉴权
+    let authTimer = null;
     const wsUrlInput = document.getElementById('wsUrl');
+    const wsToken = document.getElementById('wsToken');
     const connectBtn = document.getElementById('connectBtn');
     const refreshBtn = document.getElementById('refreshBtn');
     const statusBar = document.getElementById('statusBar');
 
-    // 从 URL 查询参数读取 ws 地址并填入输入框
+    // 从 URL 查询参数读取 ws 地址 / token 并填入（token 不设默认值）
     (function(){
         const params = new URLSearchParams(location.search);
         const urlFromParam = params.get('ws');
         if(urlFromParam){
             wsUrlInput.value = urlFromParam.trim();
+        }
+        const tokenFromParam = params.get('token');
+        if(tokenFromParam){
+            wsToken.value = tokenFromParam.trim();
         }
     })();
 
@@ -627,105 +633,139 @@
         setPointButtonsEnabled(false);
     }
 
-    // 发送"点击"命令：依次移动到每个点并单击
+    // ================== 新协议（JSON-RPC）相关 ==================
+
+    // 发送一次 RPC 请求（fire-and-forget）
+    function rpc(method, params){
+        if(!authed){ return false; }
+        ws.send(JSON.stringify({id: ++seq, method: method, params: params || {}}));
+        return true;
+    }
+
+    // 解码二进制帧：head(JSON,含 payloads 长度) + \n + 各 payload 二进制
+    function decodeFrame(buf){
+        const bytes = new Uint8Array(buf);
+        const sep = bytes.indexOf(0x0A); // 找 \n 分隔符
+        if(sep < 0) return null;
+        let head;
+        try{
+            head = JSON.parse(new TextDecoder().decode(bytes.subarray(0, sep)));
+        }catch(e){
+            return null;
+        }
+        const payloads = [];
+        const body = buf.slice(sep + 1);
+        const pl = head.payloads || [];
+        let off = 0;
+        for(const p of pl){
+            payloads.push(body.slice(off, off + p.length));
+            off += p.length;
+        }
+        return {head: head, payloads: payloads};
+    }
+
+    // 处理服务端下行消息（文本 JSON 或二进制帧）
+    function handleServerMessage(obj, payloads){
+        if(obj.type === 'auth_ok'){
+            authed = true;
+            clearTimeout(authTimer);
+            setStatus('✅ 鉴权成功，WebSocket 就绪');
+            refreshBtn.disabled = false;
+            moveBtn.disabled = false;
+            addWsHistory(wsUrlInput.value.trim());
+            rpc('graphic.capture'); // 连接成功后抓一帧
+            return;
+        }
+        if(obj.error){
+            setStatus('❌ 命令失败: ' + (obj.error.msg !== undefined ? obj.error.msg : 'code ' + obj.error.code));
+            return;
+        }
+        // graphic.capture 的响应：result.fmt=jpeg 且带 payload
+        if(obj.result && obj.result.fmt === 'jpeg' && payloads.length > 0){
+            showScreenImage(new Blob([payloads[0]], {type:'image/jpeg'}));
+            setStatus('画面已更新');
+            refreshBtn.disabled = false;
+            return;
+        }
+        // 其它命令的普通回执
+        if(obj.id !== undefined){
+            setStatus('命令已发送 (id=' + obj.id + ')');
+        }
+    }
+
+    // ================== 命令发送（旧文本命令 → 新 RPC） ==================
+
+    // 左键点击：依次移动到每个点并单击
     function sendPointCommands(){
         if(pointList.length === 0){
             alert('还没有选点');
             return;
         }
-        if(!ws || ws.readyState !== WebSocket.OPEN){
-            alert('未建立连接');
-            return;
-        }
-        const lines = [];
+        if(!authed){ alert('未完成连接'); return; }
         for(const p of pointList){
-            lines.push(`MouseMoveTo ${p.x} ${p.y}`);
-            lines.push('MouseLeftClick');
+            rpc('keymouse.mouse_move_to', {x:p.x, y:p.y});
+            rpc('keymouse.mouse_left_click');
         }
-        for(const line of lines){
-            ws.send(line);
-        }
-        setStatus('已发送命令：' + lines.join(', '));
-        ws.send('Capture');
+        rpc('graphic.capture'); // 操作后自动刷新画面
+        setStatus('已发送点击命令：' + pointList.length + ' 个点');
         pointList = [];
         renderMainPoints();
         setPointButtonsEnabled(false);
     }
 
-    // 发送"右键点击"命令：与左键一致，仅 MouseLeftClick 换为 MouseRightClick
+    // 右键点击：与左键一致，仅左键换右键
     function sendPointRightCommands(){
         if(pointList.length === 0){
             alert('还没有选点');
             return;
         }
-        if(!ws || ws.readyState !== WebSocket.OPEN){
-            alert('未建立连接');
-            return;
-        }
-        const lines = [];
+        if(!authed){ alert('未完成连接'); return; }
         for(const p of pointList){
-            lines.push(`MouseMoveTo ${p.x} ${p.y}`);
-            lines.push('MouseRightClick');
+            rpc('keymouse.mouse_move_to', {x:p.x, y:p.y});
+            rpc('keymouse.mouse_right_click');
         }
-        for(const line of lines){
-            ws.send(line);
-        }
-        setStatus('已发送命令：' + lines.join(', '));
-        ws.send('Capture');
+        rpc('graphic.capture');
+        setStatus('已发送右键点击命令：' + pointList.length + ' 个点');
         pointList = [];
         renderMainPoints();
         setPointButtonsEnabled(false);
     }
 
-    // 发送"拖动"命令：起点按下，沿后续点移动，终点松开
+    // 左键拖动：起点按下，沿后续点移动，终点松开
     function sendPointDragCommands(){
         if(pointList.length < 2){
             alert('拖动至少需要 2 个点（起点和终点）');
             return;
         }
-        if(!ws || ws.readyState !== WebSocket.OPEN){
-            alert('未建立连接');
-            return;
-        }
-        const lines = [];
-        lines.push(`MouseMoveTo ${pointList[0].x} ${pointList[0].y}`);
-        lines.push('MouseLeftPress');
+        if(!authed){ alert('未完成连接'); return; }
+        rpc('keymouse.mouse_move_to', {x:pointList[0].x, y:pointList[0].y});
+        rpc('keymouse.mouse_left_press');
         for(let i = 1; i < pointList.length; i++){
-            lines.push(`MouseMoveTo ${pointList[i].x} ${pointList[i].y}`);
+            rpc('keymouse.mouse_move_to', {x:pointList[i].x, y:pointList[i].y});
         }
-        lines.push('MouseLeftRelease');
-        for(const line of lines){
-            ws.send(line);
-        }
-        setStatus('已发送命令：' + lines.join(', '));
-        ws.send('Capture');
+        rpc('keymouse.mouse_left_release');
+        rpc('graphic.capture');
+        setStatus('已发送左键拖动命令：' + pointList.length + ' 个点');
         pointList = [];
         renderMainPoints();
         setPointButtonsEnabled(false);
     }
 
-    // 发送"右键拖动"命令：与左键一致，仅 MouseLeft 换为 MouseRight
+    // 右键拖动：与左键一致，仅左键换右键
     function sendPointRightDragCommands(){
         if(pointList.length < 2){
             alert('拖动至少需要 2 个点（起点和终点）');
             return;
         }
-        if(!ws || ws.readyState !== WebSocket.OPEN){
-            alert('未建立连接');
-            return;
-        }
-        const lines = [];
-        lines.push(`MouseMoveTo ${pointList[0].x} ${pointList[0].y}`);
-        lines.push('MouseRightPress');
+        if(!authed){ alert('未完成连接'); return; }
+        rpc('keymouse.mouse_move_to', {x:pointList[0].x, y:pointList[0].y});
+        rpc('keymouse.mouse_right_press');
         for(let i = 1; i < pointList.length; i++){
-            lines.push(`MouseMoveTo ${pointList[i].x} ${pointList[i].y}`);
+            rpc('keymouse.mouse_move_to', {x:pointList[i].x, y:pointList[i].y});
         }
-        lines.push('MouseRightRelease');
-        for(const line of lines){
-            ws.send(line);
-        }
-        setStatus('已发送命令：' + lines.join(', '));
-        ws.send('Capture');
+        rpc('keymouse.mouse_right_release');
+        rpc('graphic.capture');
+        setStatus('已发送右键拖动命令：' + pointList.length + ' 个点');
         pointList = [];
         renderMainPoints();
         setPointButtonsEnabled(false);
@@ -746,106 +786,59 @@
 
     // 手动填坐标移动鼠标
     moveBtn.addEventListener('click',()=>{
-        if(!ws || ws.readyState !== WebSocket.OPEN){
-            alert('未建立连接');
-            return;
-        }
+        if(!authed){ alert('未完成连接'); return; }
         const x = parseInt(moveX.value, 10);
         const y = parseInt(moveY.value, 10);
         if(isNaN(x) || isNaN(y) || x < 0 || y < 0){
             alert('请输入有效的 x、y 坐标');
             return;
         }
-        ws.send(`MouseMoveTo ${x} ${y}`);
-        setStatus(`已发送 MouseMoveTo ${x} ${y}`);
-        ws.send('Capture');
+        rpc('keymouse.mouse_move_to', {x:x, y:y});
+        setStatus(`已发送 mouse_move_to ${x} ${y}`);
+        rpc('graphic.capture'); // 操作后自动刷新画面
     });
 
     // 发送截图命令
     function sendCapture(){
-        if(!ws || ws.readyState !== WebSocket.OPEN){
-            alert('未建立连接');
-            return;
-        }
-        ws.send('Capture');
-        setStatus('已发送 Capture');
+        if(!authed){ alert('未完成连接'); return; }
+        rpc('graphic.capture');
+        setStatus('已发送 graphic.capture');
     }
-
-    // 快捷键命令映射（每条命令独立发送）
-    const shortcutBtns = document.querySelectorAll('.shortcut-btn');
-    function setShortcutEnabled(enabled){
-        for(const b of shortcutBtns){
-            // 选点相关按钮（清除/点击/拖动）由选点状态单独控制，不随连接状态启停
-            if(b === clearMainPointsBtn || b === confirmMainPointsBtn || b === confirmMainPointsRightBtn || b === dragMainPointsBtn || b === dragMainPointsRightBtn){
-                continue;
-            }
-            b.disabled = !enabled;
-        }
-    }
-    function sendCommand(cmd){
-        if(!cmd) return;
-        if(!ws || ws.readyState !== WebSocket.OPEN){
-            alert('未建立连接');
-            return;
-        }
-        ws.send(cmd);
-        setStatus('已发送命令：' + cmd);
-        ws.send('Capture');
-    }
-    shortcutBtns.forEach((btn)=>{
-        btn.addEventListener('click',()=>{
-            const cmd = btn.dataset.cmd;
-            // 关机属高风险操作，需二次确认避免误点
-            if(cmd === 'Shutdown'){
-                if(!confirm('确定要执行关机吗？')){
-                    return;
-                }
-            }
-            sendCommand(cmd);
-        });
-    });
 
     // 当前处于按下状态的切换键数量（决定普通键是否额外发送 Capture）
     let togglePressedCount = 0;
 
-    // 虚拟键盘按键：点击发送 KeyboardWrite <键值>（排除 toggle 切换键）
+    // 虚拟键盘按键：点击发送 keyboard_write <键值>（排除 toggle 切换键）
     document.querySelectorAll('.keyboard .kb-key[data-key]:not(.kb-toggle)').forEach((k)=>{
         k.addEventListener('click',()=>{
             const key = k.dataset.key;
-            if(!ws || ws.readyState !== WebSocket.OPEN){
-                alert('未建立连接');
-                return;
-            }
-            ws.send('KeyboardWrite ' + key);
-            setStatus('已发送 KeyboardWrite ' + key);
+            if(!authed){ alert('未完成连接'); return; }
+            rpc('keymouse.keyboard_write', {key:key});
+            setStatus('已发送 keyboard_write ' + key);
             // 无切换键按下时才刷新画面；组合键（如 Alt+E）按下期间不额外截图
             if(togglePressedCount === 0){
-                ws.send('Capture');
+                rpc('graphic.capture');
             }
         });
     });
 
-    // 虚拟键盘切换键（Alt/Ctrl）：点击按下/松开，发送 KeyboardPress/KeyboardRelease <键值>
+    // 虚拟键盘切换键（Alt/Ctrl/Shift）：点击按下/松开，发送 keyboard_press/release <键值>
     document.querySelectorAll('.keyboard .kb-toggle').forEach((k)=>{
         let pressed = false;
         k.addEventListener('click',()=>{
-            if(!ws || ws.readyState !== WebSocket.OPEN){
-                alert('未建立连接');
-                return;
-            }
+            if(!authed){ alert('未完成连接'); return; }
             const key = k.dataset.key;
             pressed = !pressed;
             k.classList.toggle('kb-pressed', pressed);
-            const cmd = pressed ? `KeyboardPress ${key}` : `KeyboardRelease ${key}`;
-            ws.send(cmd);
-            setStatus('已发送 ' + cmd);
-            if (pressed){
+            if(pressed){
+                rpc('keymouse.keyboard_press', {key:key});
                 togglePressedCount++;
+                setStatus('已发送 keyboard_press ' + key);
             }else{
                 if(togglePressedCount > 0) togglePressedCount--;
-            }
-            if (!pressed){
-                ws.send('Capture');
+                rpc('keymouse.keyboard_release', {key:key});
+                setStatus('已发送 keyboard_release ' + key);
+                rpc('graphic.capture'); // 松开切换键后刷新画面
             }
         });
     });
@@ -860,39 +853,53 @@
             alert('请输入ws地址');
             return;
         }
+        authed = false;
+        seq = 0;
         ws = new WebSocket(url);
-        ws.binaryType = "blob";
+        ws.binaryType = "arraybuffer";
 
         connectBtn.textContent = '断开';
         connectBtn.classList.add('disconnect');
         refreshBtn.disabled = true;
-        setShortcutEnabled(false);
+        moveBtn.disabled = true;
+        setPointButtonsEnabled(false);
 
         ws.onopen = ()=>{
-            setStatus('✅ WebSocket连接成功');
-            ws.send('Capture');
-            // 连接成功即保存地址到历史
-            addWsHistory(url);
-            // 连接成功即可使用刷新按钮和快捷键
-            refreshBtn.disabled = false;
-            setShortcutEnabled(true);
+            setStatus('已连接，正在鉴权...');
+            // 连接后必须先发鉴权消息
+            ws.send(JSON.stringify({type:'auth', token: wsToken.value.trim()}));
+            // 客户端鉴权超时兜底（服务端 5 秒超时断连）
+            authTimer = setTimeout(()=>{
+                if(!authed && ws){
+                    setStatus('🔌 鉴权超时，正在断开');
+                    ws.close();
+                }
+            }, 6000);
         };
         ws.onmessage = (evt)=>{
-            if(evt.data instanceof Blob){
-                showScreenImage(evt.data);
-                setStatus('画面已更新');
-                refreshBtn.disabled = false;
+            if(evt.data instanceof ArrayBuffer){
+                const f = decodeFrame(evt.data);
+                if(f) handleServerMessage(f.head, f.payloads);
             }else{
-                setStatus('收到消息：' + evt.data);
+                // 文本 JSON：auth_ok 或错误回执
+                try{
+                    const obj = JSON.parse(evt.data);
+                    handleServerMessage(obj, []);
+                }catch(e){
+                    setStatus('收到消息：' + evt.data);
+                }
             }
         };
         ws.onerror = (err)=>{
             setStatus('❌ 发生错误:' + err);
         };
         ws.onclose = (e)=>{
-            // 按关闭码给出友好提示（1006 异常断开无 reason，单独处理）
+            clearTimeout(authTimer);
+            authed = false;
             let msg;
-            if(e.code === 1006){
+            if(e.code === 4001){
+                msg = '🔌 鉴权失败（token 不正确）';
+            }else if(e.code === 1006){
                 msg = '🔌 连接中断（服务器无响应 / 网络断开）';
             }else if(e.code === 1000){
                 msg = '🔌 连接已正常关闭';
@@ -906,7 +913,7 @@
             connectBtn.textContent = '连接';
             connectBtn.classList.remove('disconnect');
             refreshBtn.disabled = true;
-            setShortcutEnabled(false);
+            moveBtn.disabled = true;
             setPointButtonsEnabled(false);
             resetScreen();
         }

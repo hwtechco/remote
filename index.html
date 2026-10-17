@@ -307,6 +307,8 @@
             <button class="shortcut-btn" id="confirmMainPointsRightBtn" disabled>右键点击</button>
             <button class="shortcut-btn" id="dragMainPointsBtn" disabled>左键拖动</button>
             <button class="shortcut-btn" id="dragMainPointsRightBtn" disabled>右键拖动</button>
+            <button class="shortcut-btn" id="scrollUpBtn" disabled>向上滚动</button>
+            <button class="shortcut-btn" id="scrollDownBtn" disabled>向下滚动</button>
             <button class="shortcut-btn" data-broadcast="start" disabled>开始任务</button>
             <button class="shortcut-btn" data-broadcast="stop" disabled>停止任务</button>
             <button class="shortcut-btn" data-broadcast="shutdown" disabled>关机</button>
@@ -441,6 +443,8 @@
     const dragMainPointsBtn = document.getElementById('dragMainPointsBtn');
     const dragMainPointsRightBtn = document.getElementById('dragMainPointsRightBtn');
     const moveMainPointsBtn = document.getElementById('moveMainPointsBtn');
+    const scrollUpBtn = document.getElementById('scrollUpBtn');
+    const scrollDownBtn = document.getElementById('scrollDownBtn');
     let mainImg = null;
 
     // WebSocket地址历史
@@ -607,6 +611,8 @@
     function setActionButtonsEnabled(en){
         refreshBtn.disabled = !en;
         document.querySelectorAll('.shortcut-btn[data-broadcast]').forEach((b)=> b.disabled = !en);
+        scrollUpBtn.disabled = !en;
+        scrollDownBtn.disabled = !en;
     }
 
     // 断开连接后恢复画面区域的初始状态（占位提示 + 清空选点）
@@ -795,6 +801,20 @@
     dragMainPointsBtn.onclick = sendPointDragCommands;
     dragMainPointsRightBtn.onclick = sendPointRightDragCommands;
     moveMainPointsBtn.onclick = sendPointMoveCommands;
+
+    // 向上 / 向下滚动：发送 mouse_scroll_up / mouse_scroll_down
+    scrollUpBtn.addEventListener('click', ()=>{
+        if(!authed){ alert('未完成连接'); return; }
+        rpc('keymouse.mouse_scroll_up', {steps: 24});
+        setStatus('已发送 mouse_scroll_up');
+        rpc('graphic.capture');
+    });
+    scrollDownBtn.addEventListener('click', ()=>{
+        if(!authed){ alert('未完成连接'); return; }
+        rpc('keymouse.mouse_scroll_down', {steps: 24});
+        setStatus('已发送 mouse_scroll_down');
+        rpc('graphic.capture');
+    });
 
     // 广播按钮（开始/停止/关机）：调用 broadcast RPC 广播对应消息
     document.querySelectorAll('.shortcut-btn[data-broadcast]').forEach((b)=>{

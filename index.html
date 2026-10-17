@@ -125,15 +125,6 @@
             color: #999;
             cursor: not-allowed;
         }
-        /* 鼠标移动坐标输入框 */
-        .move-bar input[type="number"] {
-            width: 70px;
-            padding: 4px 8px;
-            font-size: 12px;
-            border: 1px solid #d0d7de;
-            border-radius: 5px;
-            flex-shrink: 0;
-        }
         /* 图片显示区域 */
         #screenArea {
             width: 100%;
@@ -315,18 +306,10 @@
             <button class="shortcut-btn" id="confirmMainPointsRightBtn" disabled>右键点击</button>
             <button class="shortcut-btn" id="dragMainPointsBtn" disabled>左键拖动</button>
             <button class="shortcut-btn" id="dragMainPointsRightBtn" disabled>右键拖动</button>
+            <button class="shortcut-btn" id="moveMainPointsBtn" disabled>鼠标移动</button>
             <button class="shortcut-btn" data-broadcast="start" disabled>开始任务</button>
             <button class="shortcut-btn" data-broadcast="stop" disabled>停止任务</button>
             <button class="shortcut-btn" data-broadcast="shutdown" disabled>关机</button>
-        </div>
-    </div>
-
-    <!-- 鼠标移动（手动填坐标） -->
-    <div class="item">
-        <div class="shortcut-bar move-bar">
-            <input type="number" id="moveX" placeholder="X" min="0">
-            <input type="number" id="moveY" placeholder="Y" min="0">
-            <button class="shortcut-btn" id="moveBtn" disabled>鼠标移动</button>
         </div>
     </div>
 
@@ -457,9 +440,7 @@
     const confirmMainPointsRightBtn = document.getElementById('confirmMainPointsRightBtn');
     const dragMainPointsBtn = document.getElementById('dragMainPointsBtn');
     const dragMainPointsRightBtn = document.getElementById('dragMainPointsRightBtn');
-    const moveX = document.getElementById('moveX');
-    const moveY = document.getElementById('moveY');
-    const moveBtn = document.getElementById('moveBtn');
+    const moveMainPointsBtn = document.getElementById('moveMainPointsBtn');
     let mainImg = null;
 
     // WebSocket地址历史
@@ -619,12 +600,12 @@
         confirmMainPointsRightBtn.disabled = !en;
         dragMainPointsBtn.disabled = !en;
         dragMainPointsRightBtn.disabled = !en;
+        moveMainPointsBtn.disabled = !en;
     }
 
-    // 控制"操作类"按钮（刷新画面 / 鼠标移动 / 广播按钮）的启停
+    // 控制"操作类"按钮（刷新画面 / 广播按钮）的启停
     function setActionButtonsEnabled(en){
         refreshBtn.disabled = !en;
-        moveBtn.disabled = !en;
         document.querySelectorAll('.shortcut-btn[data-broadcast]').forEach((b)=> b.disabled = !en);
     }
 
@@ -791,11 +772,29 @@
         setPointButtonsEnabled(false);
     }
 
+    // 鼠标移动：与左键点击一致，仅依次移动到每个点、不点击
+    function sendPointMoveCommands(){
+        if(pointList.length === 0){
+            alert('还没有选点');
+            return;
+        }
+        if(!authed){ alert('未完成连接'); return; }
+        for(const p of pointList){
+            rpc('keymouse.mouse_move_to', {x:p.x, y:p.y});
+        }
+        rpc('graphic.capture'); // 操作后自动刷新画面
+        setStatus('已发送鼠标移动命令：' + pointList.length + ' 个点');
+        pointList = [];
+        renderMainPoints();
+        setPointButtonsEnabled(false);
+    }
+
     clearMainPointsBtn.onclick = clearPoints;
     confirmMainPointsBtn.onclick = sendPointCommands;
     confirmMainPointsRightBtn.onclick = sendPointRightCommands;
     dragMainPointsBtn.onclick = sendPointDragCommands;
     dragMainPointsRightBtn.onclick = sendPointRightDragCommands;
+    moveMainPointsBtn.onclick = sendPointMoveCommands;
 
     // 广播按钮（开始/停止/关机）：调用 broadcast RPC 广播对应消息
     document.querySelectorAll('.shortcut-btn[data-broadcast]').forEach((b)=>{
@@ -809,20 +808,6 @@
             rpc('broadcast', {data: data});
             setStatus('已广播：' + data);
         });
-    });
-
-    // 手动填坐标移动鼠标
-    moveBtn.addEventListener('click',()=>{
-        if(!authed){ alert('未完成连接'); return; }
-        const x = parseInt(moveX.value, 10);
-        const y = parseInt(moveY.value, 10);
-        if(isNaN(x) || isNaN(y) || x < 0 || y < 0){
-            alert('请输入有效的 x、y 坐标');
-            return;
-        }
-        rpc('keymouse.mouse_move_to', {x:x, y:y});
-        setStatus(`已发送 mouse_move_to ${x} ${y}`);
-        rpc('graphic.capture'); // 操作后自动刷新画面
     });
 
     // 发送截图命令

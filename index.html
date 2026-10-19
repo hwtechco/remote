@@ -50,41 +50,6 @@
             border-radius: 6px;
             font-size: 14px;
         }
-        /* WebSocket地址历史下拉 */
-        .ws-wrap {
-            position: relative;
-        }
-        .ws-history {
-            position: absolute;
-            top: calc(100% + 4px);
-            left: 0;
-            right: 0;
-            background: #fff;
-            border: 1px solid #d0d7de;
-            border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-            max-height: 240px;
-            overflow-y: auto;
-            z-index: 100;
-            display: none;
-        }
-        .ws-history-item {
-            padding: 8px 12px;
-            font-size: 13px;
-            color: #333;
-            cursor: pointer;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .ws-history-item:hover {
-            background-color: #f0f2f5;
-        }
-        .ws-history-empty {
-            padding: 8px 12px;
-            font-size: 13px;
-            color: #999;
-        }
         button {
             padding: 9px 18px;
             border: none;
@@ -280,10 +245,7 @@
 <div class="container">
     <div class="item">
         <div style="display:flex; gap:10px; align-items:center;">
-            <div class="ws-wrap" style="flex:1; min-width:0;">
-                <input id="wsUrl" type="text" autocomplete="off" placeholder="WebSocket地址">
-                <div id="wsHistory" class="ws-history"></div>
-            </div>
+                <input id="wsUrl" type="text" autocomplete="off" placeholder="WebSocket地址" style="flex:1; min-width:0;">
             <input id="wsToken" type="text" autocomplete="off" style="width:150px; flex-shrink:0;" placeholder="Token">
             <button id="connectBtn">连接</button>
         </div>
@@ -422,11 +384,11 @@
     // 从 URL 查询参数读取 ws 地址 / token 并填入（token 不设默认值）
     (function(){
         const params = new URLSearchParams(location.search);
-        const urlFromParam = params.get('ws');
+        const urlFromParam = params.get('u');
         if(urlFromParam){
             wsUrlInput.value = urlFromParam.trim();
         }
-        const tokenFromParam = params.get('token');
+        const tokenFromParam = params.get('t');
         if(tokenFromParam){
             wsToken.value = tokenFromParam.trim();
         }
@@ -446,61 +408,6 @@
     const scrollUpBtn = document.getElementById('scrollUpBtn');
     const scrollDownBtn = document.getElementById('scrollDownBtn');
     let mainImg = null;
-
-    // WebSocket地址历史
-    const WS_HISTORY_KEY = 'wsUrlHistory';
-    const wsHistory = document.getElementById('wsHistory');
-    function loadWsHistory(){
-        try{
-            return JSON.parse(localStorage.getItem(WS_HISTORY_KEY)) || [];
-        }catch(e){
-            return [];
-        }
-    }
-    function addWsHistory(url){
-        let list = loadWsHistory().filter(u => u !== url);
-        list.unshift(url);
-        localStorage.setItem(WS_HISTORY_KEY, JSON.stringify(list.slice(0, 10)));
-    }
-    function renderWsHistory(){
-        wsHistory.innerHTML = '';
-        const list = loadWsHistory();
-        if(list.length === 0){
-            const empty = document.createElement('div');
-            empty.className = 'ws-history-empty';
-            empty.textContent = '暂无历史地址';
-            wsHistory.appendChild(empty);
-            return;
-        }
-        for(const url of list){
-            const item = document.createElement('div');
-            item.className = 'ws-history-item';
-            item.textContent = url;
-            item.title = url;
-            // 防止点击时触发 input 的 blur 提前隐藏下拉
-            item.addEventListener('mousedown',(e)=> e.preventDefault());
-            item.addEventListener('click',()=>{
-                wsUrlInput.value = url;
-                hideWsHistory();
-                wsUrlInput.focus();
-            });
-            wsHistory.appendChild(item);
-        }
-    }
-    function showWsHistory(){
-        renderWsHistory();
-        wsHistory.style.display = 'block';
-    }
-    function hideWsHistory(){
-        wsHistory.style.display = 'none';
-    }
-    wsUrlInput.addEventListener('focus', showWsHistory);
-    wsUrlInput.addEventListener('blur', ()=>{
-        setTimeout(hideWsHistory, 150);
-    });
-    wsUrlInput.addEventListener('keydown',(e)=>{
-        if(e.key === 'Escape') hideWsHistory();
-    });
 
     // 选点状态
     let currentImageBlobUrl = null;
@@ -668,7 +575,6 @@
             clearTimeout(authTimer);
             setStatus('✅ 鉴权成功，WebSocket 就绪');
             setActionButtonsEnabled(true);
-            addWsHistory(wsUrlInput.value.trim());
             rpc('graphic.capture'); // 连接成功后抓一帧
             return;
         }

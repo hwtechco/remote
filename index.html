@@ -503,29 +503,6 @@
         return Math.max(8, 22 / (mainScale || 1));
     }
 
-    // 准星相对手指的偏移量（屏幕 CSS 像素），避免手指遮挡准星；方向按手指位置动态调整
-    const CROSSHAIR_OFFSET_CSS = 60;
-
-    // 计算准星实际显示/落点位置：触屏时偏移以避开手指，鼠标则保持原位。
-    // 默认向上偏移；靠近顶部时向下偏移进入画面，靠近底部时向下偏移以便选到最底部。
-    function offsetPoint(p, useOffset){
-        if(!p) return null;
-        if(!useOffset) return p;
-        const off = Math.round(CROSSHAIR_OFFSET_CSS / (mainScale || 1));
-        const maxX = Math.max(0, screenPointCanvas.width - 1);
-        const maxY = Math.max(0, screenPointCanvas.height - 1);
-        let dy = -off; // 默认向上
-        if(p.y - off < 0){
-            dy = off; // 靠近顶部：向下偏移
-        } else if(p.y + off > maxY){
-            dy = off; // 靠近底部：向下偏移，使准星能落到最底部边缘
-        }
-        return {
-            x: Math.max(0, Math.min(maxX, p.x)),
-            y: Math.max(0, Math.min(maxY, p.y + dy))
-        };
-    }
-
     // 绘制选点标记：微调中画准星（白圈 + 红色十字星），松开后画红色圆点
     function drawCrosshair(x, y, adjusting){
         if(!adjusting){
@@ -589,8 +566,7 @@
     function onPointerDown(e){
         if(!mainImg) return;
         e.preventDefault();
-        const useOffset = e.pointerType !== 'mouse';
-        const p = offsetPoint(pointFromPointer(e), useOffset);
+        const p = pointFromPointer(e);
         if(!p) return;
         pendingPoint = p;
         try{ mainImg.setPointerCapture(e.pointerId); }catch(_){}
@@ -599,8 +575,7 @@
 
     function onPointerMove(e){
         if(!pendingPoint) return;
-        const useOffset = e.pointerType !== 'mouse';
-        const p = offsetPoint(pointFromPointer(e), useOffset);
+        const p = pointFromPointer(e);
         if(!p) return;
         pendingPoint = p;
         renderMainPoints();
@@ -608,8 +583,7 @@
 
     function onPointerUp(e){
         if(!pendingPoint) return;
-        const useOffset = e.pointerType !== 'mouse';
-        const p = offsetPoint(pointFromPointer(e), useOffset);
+        const p = pointFromPointer(e);
         if(p) pendingPoint = p; // 松开位置若在图像内，以松开位置为准
         pointList.push(pendingPoint);
         pendingPoint = null;

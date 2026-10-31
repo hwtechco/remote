@@ -101,8 +101,7 @@
             align-items: center;
             justify-content: center;
             overflow: hidden;
-            cursor: crosshair;
-            touch-action: none;
+            cursor: pointer;
             position: relative;
             padding: 0;
         }
@@ -111,10 +110,6 @@
             height: 100%;
             object-fit: contain;
             display: block;
-            touch-action: none;
-            -webkit-user-select: none;
-            user-select: none;
-            -webkit-touch-callout: none;
         }
         #screenPointCanvas {
             position: absolute;
@@ -440,11 +435,10 @@
         img.onload = ()=>{
             positionMainCanvas();
         };
-        // 选点交互：按下出现准星，拖动微调，松开落点（属性赋值可避免重复绑定）
-        img.onpointerdown = onPointerDown;
-        img.onpointermove = onPointerMove;
-        img.onpointerup = onPointerUp;
-        img.onpointercancel = onPointerCancel;
+        // 点击画面直接选点
+        img.onclick = (e)=>{
+            addPointFromEvent(e);
+        };
     }
 
     // 计算 object-fit:contain 时图片在盒内的实际显示区域
@@ -466,7 +460,6 @@
         const imgRect = mainImg.getBoundingClientRect();
         const areaRect = screenArea.getBoundingClientRect();
         const c = containRect(imgRect.width, imgRect.height, mainImg.naturalWidth, mainImg.naturalHeight);
-        mainScale = c.w / mainImg.naturalWidth;
         screenPointCanvas.style.left = (imgRect.left - areaRect.left + c.x) + 'px';
         screenPointCanvas.style.top = (imgRect.top - areaRect.top + c.y) + 'px';
         screenPointCanvas.style.width = c.w + 'px';
@@ -481,120 +474,35 @@
         positionMainCanvas();
     });
 
-    // 选点画布相对图像像素的显示比例（用于让准星在屏幕上保持稳定大小）
-    let mainScale = 1;
-
-    // 将指针位置换算为图像原始像素坐标；落在 contain 留白处则返回 null
-    function pointFromPointer(e){
-        if(!mainImg) return null;
+    // 主图点击采集坐标（换算为图像原始像素）
+    function addPointFromEvent(e){
+        if(!mainImg) return;
         const rect = mainImg.getBoundingClientRect();
         const c = containRect(rect.width, rect.height, mainImg.naturalWidth, mainImg.naturalHeight);
-        const x = e.clientX - rect.left - c.x;
-        const y = e.clientY - rect.top - c.y;
-        if(x < 0 || y < 0 || x > c.w || y > c.h) return null;
-        return {
-            x: Math.round(x * mainImg.naturalWidth / c.w),
-            y: Math.round(y * mainImg.naturalHeight / c.h)
-        };
-    }
-
-    // 准星半径：以屏幕上的 CSS 像素为准，保证手机缩放下也清晰可辨、便于抓取
-    function crosshairRadius(){
-        return Math.max(8, 22 / (mainScale || 1));
-    }
-
-    // 绘制选点标记：微调中画准星（白圈 + 红色十字星），松开后画红色圆点
-    function drawCrosshair(x, y, adjusting){
-        if(!adjusting){
-            // 松开后的已落点：红色圆点，与最初版本一致（半径 6，带白色描边）
-            mainCtx.beginPath();
-            mainCtx.arc(x, y, 6, 0, Math.PI*2);
-            mainCtx.fillStyle = '#ff3333';
-            mainCtx.fill();
-            mainCtx.strokeStyle = '#ffffff';
-            mainCtx.lineWidth = 2;
-            mainCtx.stroke();
-            return;
-        }
-        // 按下/微调中：完整准星（白色圆圈 + 内部红色单线十字星）
-        const R = crosshairRadius();
-        // 外圈深色描边，避免白圈在浅色背景上不明显
-        mainCtx.beginPath();
-        mainCtx.arc(x, y, R + 1, 0, Math.PI*2);
-        mainCtx.strokeStyle = 'rgba(0,0,0,0.55)';
-        mainCtx.lineWidth = 2;
-        mainCtx.stroke();
-        // 白色圆圈（虚线标识正在微调）
-        mainCtx.beginPath();
-        mainCtx.arc(x, y, R, 0, Math.PI*2);
-        mainCtx.strokeStyle = '#ffffff';
-        mainCtx.lineWidth = 2.5;
-        mainCtx.setLineDash([6, 4]);
-        mainCtx.stroke();
-        mainCtx.setLineDash([]);
-        // 内部红色单线十字星
-        const L = R * 0.72;
-        mainCtx.lineWidth = 2;
-        mainCtx.strokeStyle = '#ff3333';
-        mainCtx.beginPath();
-        mainCtx.moveTo(x, y - L);
-        mainCtx.lineTo(x, y + L);
-        mainCtx.moveTo(x - L, y);
-        mainCtx.lineTo(x + L, y);
-        mainCtx.stroke();
-        // 中心点
-        mainCtx.beginPath();
-        mainCtx.arc(x, y, 1.5, 0, Math.PI*2);
-        mainCtx.fillStyle = '#ff3333';
-        mainCtx.fill();
-    }
-
-    // 在主图画布上绘制所有已选点 + 正在微调的准星
-    function renderMainPoints(){
-        mainCtx.clearRect(0,0,screenPointCanvas.width,screenPointCanvas.height);
-        for(const p of pointList){
-            drawCrosshair(p.x, p.y, false);
-        }
-        if(pendingPoint){
-            drawCrosshair(pendingPoint.x, pendingPoint.y, true);
-        }
-    }
-
-    // ---- 选点交互：按下出现准星，拖动微调，松开落点 ----
-    let pendingPoint = null; // 正在微调的准星（图像像素坐标），松开后写入 pointList
-
-    function onPointerDown(e){
-        if(!mainImg) return;
-        e.preventDefault();
-        const p = pointFromPointer(e);
-        if(!p) return;
-        pendingPoint = p;
-        try{ mainImg.setPointerCapture(e.pointerId); }catch(_){}
-        renderMainPoints();
-    }
-
-    function onPointerMove(e){
-        if(!pendingPoint) return;
-        const p = pointFromPointer(e);
-        if(!p) return;
-        pendingPoint = p;
-        renderMainPoints();
-    }
-
-    function onPointerUp(e){
-        if(!pendingPoint) return;
-        const p = pointFromPointer(e);
-        if(p) pendingPoint = p; // 松开位置若在图像内，以松开位置为准
-        pointList.push(pendingPoint);
-        pendingPoint = null;
+        const clickX = e.clientX - rect.left - c.x;
+        const clickY = e.clientY - rect.top - c.y;
+        // 点击在 contain 留白处（图片显示区域外）则忽略
+        if(clickX < 0 || clickY < 0 || clickX > c.w || clickY > c.h) return;
+        const px = Math.round(clickX * mainImg.naturalWidth / c.w);
+        const py = Math.round(clickY * mainImg.naturalHeight / c.h);
+        pointList.push({x:px,y:py});
         renderMainPoints();
         setStatus('已选点：' + pointList.length);
         setPointButtonsEnabled(true);
     }
 
-    function onPointerCancel(){
-        pendingPoint = null;
-        renderMainPoints();
+    // 在主图画布上绘制选点
+    function renderMainPoints(){
+        mainCtx.clearRect(0,0,screenPointCanvas.width,screenPointCanvas.height);
+        mainCtx.fillStyle = "#ff3333";
+        mainCtx.strokeStyle = "#fff";
+        mainCtx.lineWidth = 2;
+        for(const p of pointList){
+            mainCtx.beginPath();
+            mainCtx.arc(p.x,p.y,6,0,Math.PI*2);
+            mainCtx.fill();
+            mainCtx.stroke();
+        }
     }
 
     function setPointButtonsEnabled(en){
@@ -622,7 +530,6 @@
         }
         mainImg = null;
         pointList = [];
-        pendingPoint = null;
         const img = screenArea.querySelector('img');
         if(img) img.remove();
         mainCtx.clearRect(0,0,screenPointCanvas.width,screenPointCanvas.height);

@@ -110,6 +110,9 @@
             height: 100%;
             object-fit: contain;
             display: block;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
         #screenPointCanvas {
             position: absolute;
@@ -263,6 +266,7 @@
     <div class="item">
         <div class="shortcut-bar">
             <button class="shortcut-btn" id="refreshBtn" disabled>刷新画面</button>
+            <button class="shortcut-btn" id="addMainPointBtn" disabled>增加选点</button>
             <button class="shortcut-btn" id="clearMainPointsBtn" disabled>清除选点</button>
             <button class="shortcut-btn" id="moveMainPointsBtn" disabled>鼠标移动</button>
             <button class="shortcut-btn" id="confirmMainPointsBtn" disabled>左键点击</button>
@@ -379,6 +383,7 @@
     const wsToken = document.getElementById('wsToken');
     const connectBtn = document.getElementById('connectBtn');
     const refreshBtn = document.getElementById('refreshBtn');
+    const addMainPointBtn = document.getElementById('addMainPointBtn');
     const statusBar = document.getElementById('statusBar');
 
     // 从 URL 查询参数读取 ws 地址 / token 并填入（token 不设默认值）
@@ -435,10 +440,11 @@
         img.onload = ()=>{
             positionMainCanvas();
         };
-        // 点击画面直接选点
-        img.onclick = (e)=>{
-            addPointFromEvent(e);
-        };
+        // 拖动画面微调最近一个选点（属性赋值避免重复绑定）
+        img.onpointerdown = onPointerDown;
+        img.onpointermove = onPointerMove;
+        img.onpointerup = onPointerUp;
+        img.onpointercancel = onPointerCancel;
     }
 
     // 计算 object-fit:contain 时图片在盒内的实际显示区域
@@ -474,21 +480,62 @@
         positionMainCanvas();
     });
 
-    // 主图点击采集坐标（换算为图像原始像素）
-    function addPointFromEvent(e){
-        if(!mainImg) return;
+    // 将指针位置换算为图像原始像素坐标；落在 contain 留白外则返回 null
+    function pointFromPointer(e){
+        if(!mainImg) return null;
         const rect = mainImg.getBoundingClientRect();
         const c = containRect(rect.width, rect.height, mainImg.naturalWidth, mainImg.naturalHeight);
-        const clickX = e.clientX - rect.left - c.x;
-        const clickY = e.clientY - rect.top - c.y;
-        // 点击在 contain 留白处（图片显示区域外）则忽略
-        if(clickX < 0 || clickY < 0 || clickX > c.w || clickY > c.h) return;
-        const px = Math.round(clickX * mainImg.naturalWidth / c.w);
-        const py = Math.round(clickY * mainImg.naturalHeight / c.h);
-        pointList.push({x:px,y:py});
+        const x = e.clientX - rect.left - c.x;
+        const y = e.clientY - rect.top - c.y;
+        if(x < 0 || y < 0 || x > c.w || y > c.h) return null;
+        return {
+            x: Math.round(x * mainImg.naturalWidth / c.w),
+            y: Math.round(y * mainImg.naturalHeight / c.h)
+        };
+    }
+
+    // 将指针位置换算为图像原始像素坐标（不判断边界，供拖动增量计算）
+    function pointerPosRaw(e){
+        if(!mainImg) return null;
+        const rect = mainImg.getBoundingClientRect();
+        const c = containRect(rect.width, rect.height, mainImg.naturalWidth, mainImg.naturalHeight);
+        return {
+            x: Math.round((e.clientX - rect.left - c.x) * mainImg.naturalWidth / c.w),
+            y: Math.round((e.clientY - rect.top - c.y) * mainImg.naturalHeight / c.h)
+        };
+    }
+
+    // ---- 拖动微调最近一个选点：按下记录起点，按相对位移移动最后一个选点 ----
+    let dragState = null; // {startX, startY, pointX, pointY}
+
+    function onPointerDown(e){
+        if(!mainImg || pointList.length === 0) return;
+        e.preventDefault();
+        const p = pointerPosRaw(e);
+        if(!p) return;
+        const last = pointList[pointList.length - 1];
+        dragState = { startX: p.x, startY: p.y, pointX: last.x, pointY: last.y };
+        try{ mainImg.setPointerCapture(e.pointerId); }catch(_){}
+    }
+
+    function onPointerMove(e){
+        if(!dragState) return;
+        const p = pointerPosRaw(e);
+        if(!p) return;
+        const last = pointList[pointList.length - 1];
+        const maxX = Math.max(0, screenPointCanvas.width - 1);
+        const maxY = Math.max(0, screenPointCanvas.height - 1);
+        last.x = Math.max(0, Math.min(maxX, dragState.pointX + (p.x - dragState.startX)));
+        last.y = Math.max(0, Math.min(maxY, dragState.pointY + (p.y - dragState.startY)));
         renderMainPoints();
-        setStatus('已选点：' + pointList.length);
-        setPointButtonsEnabled(true);
+    }
+
+    function onPointerUp(){
+        dragState = null;
+    }
+
+    function onPointerCancel(){
+        dragState = null;
     }
 
     // 在主图画布上绘制选点
@@ -517,6 +564,7 @@
     // 控制"操作类"按钮（刷新画面 / 广播按钮）的启停
     function setActionButtonsEnabled(en){
         refreshBtn.disabled = !en;
+        addMainPointBtn.disabled = !en;
         document.querySelectorAll('.shortcut-btn[data-broadcast]').forEach((b)=> b.disabled = !en);
         scrollUpBtn.disabled = !en;
         scrollDownBtn.disabled = !en;
@@ -530,6 +578,7 @@
         }
         mainImg = null;
         pointList = [];
+        dragState = null;
         const img = screenArea.querySelector('img');
         if(img) img.remove();
         mainCtx.clearRect(0,0,screenPointCanvas.width,screenPointCanvas.height);
@@ -544,6 +593,22 @@
         if(!authed){ return false; }
         ws.send(JSON.stringify({id: ++seq, method: method, params: params || {}}));
         return true;
+    }
+
+    // 带响应的 RPC：响应到达后 resolve(result)；超时或出错 reject
+    const pendingRpc = new Map(); // id -> resolve(result)
+    function rpcAwait(method, params, timeoutMs){
+        if(!authed){ return Promise.reject(new Error('未连接')); }
+        const id = ++seq;
+        return new Promise((resolve, reject)=>{
+            pendingRpc.set(id, resolve);
+            ws.send(JSON.stringify({id: id, method: method, params: params || {}}));
+            setTimeout(()=>{
+                if(pendingRpc.delete(id)){
+                    reject(new Error('请求超时'));
+                }
+            }, timeoutMs || 3000);
+        });
     }
 
     // 解码二进制帧：head(JSON,含 payloads 长度) + \n + 各 payload 二进制
@@ -584,6 +649,18 @@
         }
         if(obj.error){
             setStatus('❌ 命令失败: ' + (obj.error.msg !== undefined ? obj.error.msg : 'code ' + obj.error.code));
+            if(obj.id !== undefined && pendingRpc.has(obj.id)){
+                const reject = pendingRpc.get(obj.id);
+                pendingRpc.delete(obj.id);
+                reject(new Error(obj.error.msg !== undefined ? obj.error.msg : ('code ' + obj.error.code)));
+            }
+            return;
+        }
+        // 处理带响应的 RPC（如 keymouse.mouse_position）
+        if(obj.id !== undefined && pendingRpc.has(obj.id)){
+            const resolve = pendingRpc.get(obj.id);
+            pendingRpc.delete(obj.id);
+            resolve(obj.result);
             return;
         }
         // graphic.capture 的响应：result.fmt=jpeg 且带 payload
@@ -707,6 +784,24 @@
     dragMainPointsBtn.onclick = sendPointDragCommands;
     dragMainPointsRightBtn.onclick = sendPointRightDragCommands;
     moveMainPointsBtn.onclick = sendPointMoveCommands;
+
+    // 增加选点：调用 keymouse.mouse_position 获取当前鼠标位置并标记红点
+    async function addPoint(){
+        if(!authed){ alert('未完成连接'); return; }
+        setStatus('正在获取鼠标位置...');
+        try{
+            const result = await rpcAwait('keymouse.mouse_position', {});
+            const x = Math.round(result.x);
+            const y = Math.round(result.y);
+            pointList.push({x: x, y: y});
+            renderMainPoints();
+            setPointButtonsEnabled(true);
+            setStatus('已增加选点：' + pointList.length + ' (' + x + ',' + y + ')');
+        }catch(err){
+            setStatus('❌ 获取鼠标位置失败: ' + err.message);
+        }
+    }
+    addMainPointBtn.addEventListener('click', addPoint);
 
     // 向上 / 向下滚动：发送 mouse_scroll_up / mouse_scroll_down
     scrollUpBtn.addEventListener('click', ()=>{

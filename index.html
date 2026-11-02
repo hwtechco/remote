@@ -883,11 +883,11 @@
         }, 1000);
     }
 
-    // 发送截图命令（刷新画面按钮，也统一延迟 1 秒）
+    // 发送截图命令（刷新画面按钮，即时发送，不做延迟）
     function sendCapture(){
         if(!authed){ alert('未完成连接'); return; }
-        captureDelayed();
-        setStatus('已发送 graphic.capture（1 秒后刷新）');
+        rpc('graphic.capture');
+        setStatus('已发送 graphic.capture');
     }
 
     // 当前处于按下状态的切换键数量（决定普通键是否额外发送 Capture）

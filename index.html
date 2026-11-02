@@ -41,7 +41,7 @@
             margin-bottom: 0;
         }
         .screen-column {
-            flex: 2;
+            flex: 3;
             min-width: 0;
             display: flex;
             flex-direction: column;
@@ -304,6 +304,9 @@
 
         <!-- 右侧：操作按钮 + 键盘 -->
         <div class="control-column">
+            <!-- 状态栏（右侧最顶部） -->
+            <div id="statusBar">未连接</div>
+
             <!-- 操作按钮 -->
             <div class="item">
                 <div class="shortcut-bar">
@@ -414,8 +417,6 @@
             </div>
         </div>
     </div>
-
-    <div id="statusBar">未连接</div>
 </div>
 
 <script>

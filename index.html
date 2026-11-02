@@ -30,6 +30,29 @@
             margin-bottom: 12px;
             flex-shrink: 0;
         }
+        /* 主布局：PC 端左 2/3 画面 + 右 1/3 控制区 */
+        .main-layout {
+            display: flex;
+            gap: 16px;
+            align-items: stretch;
+            margin-bottom: 12px;
+        }
+        .main-layout .item {
+            margin-bottom: 0;
+        }
+        .screen-column {
+            flex: 2;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .control-column {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
         /* 屏幕画面区域：宽度占满，高度按 16:9 比例 */
         .screen-item {
             display: flex;
@@ -204,6 +227,18 @@
                 padding: 10px 10px 16px;
                 overflow-y: auto;
             }
+            /* 移动端恢复上下单栏布局：画面在上，控制区在下 */
+            .main-layout {
+                flex-direction: column;
+                gap: 0;
+                margin-bottom: 0;
+            }
+            .main-layout .item {
+                margin-bottom: 10px;
+            }
+            .control-column {
+                gap: 0;
+            }
             .item {
                 margin-bottom: 10px;
             }
@@ -254,18 +289,25 @@
         </div>
     </div>
 
-    <!-- 屏幕显示区域 -->
-    <div class="item screen-item">
-        <div id="screenArea">
-            <div id="screenPlaceholder">屏幕画面</div>
-            <canvas id="screenPointCanvas"></canvas>
+    <!-- 主布局：PC 端左 2/3 画面 + 右 1/3 控制区 -->
+    <div class="main-layout">
+        <!-- 左侧：屏幕显示区域 -->
+        <div class="screen-column">
+            <!-- 屏幕显示区域 -->
+            <div class="item screen-item">
+                <div id="screenArea">
+                    <div id="screenPlaceholder">屏幕画面</div>
+                    <canvas id="screenPointCanvas"></canvas>
+                </div>
+            </div>
         </div>
-    </div>
 
-    <!-- 操作按钮 -->
-    <div class="item">
-        <div class="shortcut-bar">
-            <button class="shortcut-btn" id="refreshBtn" disabled>刷新画面</button>
+        <!-- 右侧：操作按钮 + 键盘 -->
+        <div class="control-column">
+            <!-- 操作按钮 -->
+            <div class="item">
+                <div class="shortcut-bar">
+                    <button class="shortcut-btn" id="refreshBtn" disabled>刷新画面</button>
             <button class="shortcut-btn" id="addMainPointBtn" disabled>增加选点</button>
             <button class="shortcut-btn" id="clearMainPointsBtn" disabled>清除选点</button>
             <button class="shortcut-btn" id="moveMainPointsBtn" disabled>鼠标移动</button>
@@ -367,6 +409,8 @@
                 <button class="kb-key kb-w-15 kb-toggle" data-key="alt">Alt</button>
                 <button class="kb-key kb-w-15" data-key="win">Win</button>
                 <button class="kb-key kb-w-15 kb-toggle" data-key="ctrl">Ctrl</button>
+            </div>
+        </div>
             </div>
         </div>
     </div>
@@ -689,7 +733,7 @@
             rpc('keymouse.mouse_move_to', {x:p.x, y:p.y});
             rpc('keymouse.mouse_left_click');
         }
-        rpc('graphic.capture'); // 操作后自动刷新画面
+        captureDelayed(); // 操作后延迟刷新画面
         setStatus('已发送点击命令：' + pointList.length + ' 个点');
         pointList = [];
         renderMainPoints();
@@ -707,7 +751,7 @@
             rpc('keymouse.mouse_move_to', {x:p.x, y:p.y});
             rpc('keymouse.mouse_right_click');
         }
-        rpc('graphic.capture');
+        captureDelayed();
         setStatus('已发送右键点击命令：' + pointList.length + ' 个点');
         pointList = [];
         renderMainPoints();
@@ -727,7 +771,7 @@
             rpc('keymouse.mouse_move_to', {x:pointList[i].x, y:pointList[i].y});
         }
         rpc('keymouse.mouse_left_release');
-        rpc('graphic.capture');
+        captureDelayed();
         setStatus('已发送左键拖动命令：' + pointList.length + ' 个点');
         pointList = [];
         renderMainPoints();
@@ -747,7 +791,7 @@
             rpc('keymouse.mouse_move_to', {x:pointList[i].x, y:pointList[i].y});
         }
         rpc('keymouse.mouse_right_release');
-        rpc('graphic.capture');
+        captureDelayed();
         setStatus('已发送右键拖动命令：' + pointList.length + ' 个点');
         pointList = [];
         renderMainPoints();
@@ -771,7 +815,7 @@
         for(const p of pointList){
             rpc('keymouse.mouse_move_to', {x:p.x, y:p.y});
         }
-        rpc('graphic.capture'); // 操作后自动刷新画面
+        captureDelayed(); // 操作后延迟刷新画面
         setStatus('已发送鼠标移动命令：' + pointList.length + ' 个点');
         pointList = [];
         renderMainPoints();
@@ -808,13 +852,13 @@
         if(!authed){ alert('未完成连接'); return; }
         rpc('keymouse.mouse_scroll_up', {steps: 24});
         setStatus('已发送 mouse_scroll_up');
-        rpc('graphic.capture');
+        captureDelayed();
     });
     scrollDownBtn.addEventListener('click', ()=>{
         if(!authed){ alert('未完成连接'); return; }
         rpc('keymouse.mouse_scroll_down', {steps: 24});
         setStatus('已发送 mouse_scroll_down');
-        rpc('graphic.capture');
+        captureDelayed();
     });
 
     // 广播按钮（开始/停止/关机）：调用 broadcast RPC 广播对应消息
@@ -831,11 +875,18 @@
         });
     });
 
-    // 发送截图命令
+    // 延迟 1 秒后发送截图命令（除鉴权成功外的所有截图场景统一走此入口）
+    function captureDelayed(){
+        setTimeout(()=>{
+            if(authed){ rpc('graphic.capture'); }
+        }, 1000);
+    }
+
+    // 发送截图命令（刷新画面按钮，也统一延迟 1 秒）
     function sendCapture(){
         if(!authed){ alert('未完成连接'); return; }
-        rpc('graphic.capture');
-        setStatus('已发送 graphic.capture');
+        captureDelayed();
+        setStatus('已发送 graphic.capture（1 秒后刷新）');
     }
 
     // 当前处于按下状态的切换键数量（决定普通键是否额外发送 Capture）
@@ -850,7 +901,7 @@
             setStatus('已发送 keyboard_write ' + key);
             // 无切换键按下时才刷新画面；组合键（如 Alt+E）按下期间不额外截图
             if(togglePressedCount === 0){
-                rpc('graphic.capture');
+                captureDelayed();
             }
         });
     });
@@ -871,7 +922,7 @@
                 if(togglePressedCount > 0) togglePressedCount--;
                 rpc('keymouse.keyboard_release', {key:key});
                 setStatus('已发送 keyboard_release ' + key);
-                rpc('graphic.capture'); // 松开切换键后刷新画面
+                captureDelayed(); // 松开切换键后延迟刷新画面
             }
         });
     });

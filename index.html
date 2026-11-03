@@ -685,7 +685,7 @@
             clearTimeout(authTimer);
             setStatus('✅ 鉴权成功，WebSocket 就绪');
             setActionButtonsEnabled(true);
-            rpc('graphic.capture'); // 连接成功后抓一帧
+            rpc('capture'); // 连接成功后抓一帧
             return;
         }
         if(obj.type === 'broadcast'){
@@ -701,14 +701,14 @@
             }
             return;
         }
-        // 处理带响应的 RPC（如 keymouse.mouse_position）
+        // 处理带响应的 RPC（如 mouse_position）
         if(obj.id !== undefined && pendingRpc.has(obj.id)){
             const resolve = pendingRpc.get(obj.id);
             pendingRpc.delete(obj.id);
             resolve(obj.result);
             return;
         }
-        // graphic.capture 的响应：result.fmt=jpeg 且带 payload
+        // capture 的响应：result.fmt=jpeg 且带 payload
         if(obj.result && obj.result.fmt === 'jpeg' && payloads.length > 0){
             showScreenImage(new Blob([payloads[0]], {type:'image/jpeg'}));
             setStatus('画面已更新');
@@ -731,8 +731,8 @@
         }
         if(!authed){ alert('未完成连接'); return; }
         for(const p of pointList){
-            rpc('keymouse.mouse_move_to', {x:p.x, y:p.y});
-            rpc('keymouse.mouse_left_click');
+            rpc('mouse_move_to', {x:p.x, y:p.y});
+            rpc('mouse_left_click');
         }
         captureDelayed(); // 操作后延迟刷新画面
         setStatus('已发送点击命令：' + pointList.length + ' 个点');
@@ -749,8 +749,8 @@
         }
         if(!authed){ alert('未完成连接'); return; }
         for(const p of pointList){
-            rpc('keymouse.mouse_move_to', {x:p.x, y:p.y});
-            rpc('keymouse.mouse_right_click');
+            rpc('mouse_move_to', {x:p.x, y:p.y});
+            rpc('mouse_right_click');
         }
         captureDelayed();
         setStatus('已发送右键点击命令：' + pointList.length + ' 个点');
@@ -766,12 +766,12 @@
             return;
         }
         if(!authed){ alert('未完成连接'); return; }
-        rpc('keymouse.mouse_move_to', {x:pointList[0].x, y:pointList[0].y});
-        rpc('keymouse.mouse_left_press');
+        rpc('mouse_move_to', {x:pointList[0].x, y:pointList[0].y});
+        rpc('mouse_left_press');
         for(let i = 1; i < pointList.length; i++){
-            rpc('keymouse.mouse_move_to', {x:pointList[i].x, y:pointList[i].y});
+            rpc('mouse_move_to', {x:pointList[i].x, y:pointList[i].y});
         }
-        rpc('keymouse.mouse_left_release');
+        rpc('mouse_left_release');
         captureDelayed();
         setStatus('已发送左键拖动命令：' + pointList.length + ' 个点');
         pointList = [];
@@ -786,12 +786,12 @@
             return;
         }
         if(!authed){ alert('未完成连接'); return; }
-        rpc('keymouse.mouse_move_to', {x:pointList[0].x, y:pointList[0].y});
-        rpc('keymouse.mouse_right_press');
+        rpc('mouse_move_to', {x:pointList[0].x, y:pointList[0].y});
+        rpc('mouse_right_press');
         for(let i = 1; i < pointList.length; i++){
-            rpc('keymouse.mouse_move_to', {x:pointList[i].x, y:pointList[i].y});
+            rpc('mouse_move_to', {x:pointList[i].x, y:pointList[i].y});
         }
-        rpc('keymouse.mouse_right_release');
+        rpc('mouse_right_release');
         captureDelayed();
         setStatus('已发送右键拖动命令：' + pointList.length + ' 个点');
         pointList = [];
@@ -814,7 +814,7 @@
         }
         if(!authed){ alert('未完成连接'); return; }
         for(const p of pointList){
-            rpc('keymouse.mouse_move_to', {x:p.x, y:p.y});
+            rpc('mouse_move_to', {x:p.x, y:p.y});
         }
         captureDelayed(); // 操作后延迟刷新画面
         setStatus('已发送鼠标移动命令：' + pointList.length + ' 个点');
@@ -830,12 +830,12 @@
     dragMainPointsRightBtn.onclick = sendPointRightDragCommands;
     moveMainPointsBtn.onclick = sendPointMoveCommands;
 
-    // 增加选点：调用 keymouse.mouse_position 获取当前鼠标位置并标记红点
+    // 增加选点：调用 mouse_position 获取当前鼠标位置并标记红点
     async function addPoint(){
         if(!authed){ alert('未完成连接'); return; }
         setStatus('正在获取鼠标位置...');
         try{
-            const result = await rpcAwait('keymouse.mouse_position', {});
+            const result = await rpcAwait('mouse_position', {});
             const x = Math.round(result.x);
             const y = Math.round(result.y);
             pointList.push({x: x, y: y});
@@ -851,13 +851,13 @@
     // 向上 / 向下滚动：发送 mouse_scroll_up / mouse_scroll_down
     scrollUpBtn.addEventListener('click', ()=>{
         if(!authed){ alert('未完成连接'); return; }
-        rpc('keymouse.mouse_scroll_up', {steps: 24});
+        rpc('mouse_scroll_up', {steps: 24});
         setStatus('已发送 mouse_scroll_up');
         captureDelayed();
     });
     scrollDownBtn.addEventListener('click', ()=>{
         if(!authed){ alert('未完成连接'); return; }
-        rpc('keymouse.mouse_scroll_down', {steps: 24});
+        rpc('mouse_scroll_down', {steps: 24});
         setStatus('已发送 mouse_scroll_down');
         captureDelayed();
     });
@@ -885,15 +885,15 @@
         }
         captureTimer = setTimeout(()=>{
             captureTimer = null;
-            if(authed){ rpc('graphic.capture'); }
+            if(authed){ rpc('capture'); }
         }, 1000);
     }
 
     // 发送截图命令（刷新画面按钮，即时发送，不做延迟）
     function sendCapture(){
         if(!authed){ alert('未完成连接'); return; }
-        rpc('graphic.capture');
-        setStatus('已发送 graphic.capture');
+        rpc('capture');
+        setStatus('已发送 capture');
     }
 
     // 当前处于按下状态的切换键数量（决定普通键是否额外发送 Capture）
@@ -904,7 +904,7 @@
         k.addEventListener('click',()=>{
             const key = k.dataset.key;
             if(!authed){ alert('未完成连接'); return; }
-            rpc('keymouse.keyboard_write', {key:key});
+            rpc('keyboard_write', {key:key});
             setStatus('已发送 keyboard_write ' + key);
             // 无切换键按下时才刷新画面；组合键（如 Alt+E）按下期间不额外截图
             if(togglePressedCount === 0){
@@ -922,12 +922,12 @@
             pressed = !pressed;
             k.classList.toggle('kb-pressed', pressed);
             if(pressed){
-                rpc('keymouse.keyboard_press', {key:key});
+                rpc('keyboard_press', {key:key});
                 togglePressedCount++;
                 setStatus('已发送 keyboard_press ' + key);
             }else{
                 if(togglePressedCount > 0) togglePressedCount--;
-                rpc('keymouse.keyboard_release', {key:key});
+                rpc('keyboard_release', {key:key});
                 setStatus('已发送 keyboard_release ' + key);
                 captureDelayed(); // 松开切换键后延迟刷新画面
             }

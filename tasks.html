@@ -1,0 +1,1725 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>任务脚本编辑器</title>
+    <link rel="icon"
+          href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23161C24'/%3E%3Ccircle cx='9' cy='16' r='3.4' fill='%234FB2A2'/%3E%3Ccircle cx='23' cy='9' r='3' fill='%23E0A242'/%3E%3Ccircle cx='23' cy='23' r='3' fill='%239A8CE0'/%3E%3Cpath d='M12 16h5m0 0 3-5m-3 5 3 5' stroke='%238A97A6' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+    <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        :root{
+          --ink:#0F141A;
+          --panel:#161C24;
+          --raise:#1D2530;
+          --raise2:#243040;
+          --line:#2A3441;
+          --line-soft:#212A35;
+          --text:#E7EDF3;
+          --muted:#8A97A6;
+          --dim:#61707E;
+          --amber:#E0A242;
+          --teal:#4FB2A2;
+          --violet:#9A8CE0;
+          --red:#DB6A5F;
+          --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,"Noto Sans Mono",monospace;
+          --sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+          --r:3px;
+        }
+        html{-webkit-text-size-adjust:100%}
+        body{
+          background:var(--ink);color:var(--text);font-family:var(--sans);
+          font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+          min-height:100vh;
+          background-image:linear-gradient(to right,rgba(255,255,255,.016) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,.016) 1px,transparent 1px);
+          background-size:48px 48px;
+        }
+        button,input,select,textarea{font:inherit;color:inherit}
+        button{cursor:pointer;background:none;border:0}
+        input,select{background:var(--raise);border:1px solid var(--line);border-radius:var(--r);padding:5px 7px;font-size:13px;min-width:0;max-width:100%}
+        input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+        input[type=number]{font-family:var(--mono)}
+        ::placeholder{color:var(--dim)}
+
+        /* ===== 顶栏 ===== */
+        .topbar{
+          position:sticky;top:0;z-index:20;background:rgba(15,20,26,.94);
+          backdrop-filter:blur(8px);
+          border-bottom:1px solid var(--line);
+          display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;
+          padding:10px 14px;
+        }
+        .brand{display:flex;align-items:center;gap:9px;min-width:0}
+        .brand svg{width:26px;height:26px;flex:none}
+        .brand-txt h1{font-size:15px;font-weight:600;letter-spacing:.02em;line-height:1.2}
+        .brand-txt p{font-size:10.5px;color:var(--dim);font-family:var(--mono);letter-spacing:.04em;margin-top:2px}
+        .taskbar{display:flex;gap:6px;overflow-x:auto;flex:1 1 240px;min-width:0;padding-bottom:2px;scrollbar-width:thin}
+        .tab{
+          display:flex;align-items:center;gap:6px;flex:none;
+          border:1px solid var(--line);border-radius:var(--r);
+          padding:5px 8px;font-size:12.5px;color:var(--muted);background:var(--panel);
+          white-space:nowrap;max-width:200px;
+        }
+        .tab .tab-name{overflow:hidden;text-overflow:ellipsis;max-width:150px}
+        .tab .tab-n{font-family:var(--mono);font-size:10.5px;color:var(--dim)}
+        .tab[aria-current="true"]{border-color:var(--amber);color:var(--text);background:var(--raise2)}
+        .tab .tab-x{color:var(--dim);font-size:13px;line-height:1;padding:0 2px}
+        .tab .tab-x:hover{color:var(--red)}
+        .top-actions{display:flex;gap:8px;flex:none}
+        .btn{
+          border:1px solid var(--line);background:var(--raise);color:var(--text);
+          border-radius:var(--r);padding:6px 11px;font-size:12.5px;
+          transition:background .12s,border-color .12s;white-space:nowrap;
+        }
+        .btn:hover{background:var(--raise2);border-color:#3A4756}
+        .btn.primary{border-color:#6B5322;background:#2A2313;color:#F2CE8A}
+        .btn.primary:hover{background:#332A16;border-color:#8A6A28}
+
+        /* ===== 布局 ===== */
+        .shell{display:grid;align-items:start}
+        @media(min-width:900px){.shell{grid-template-columns:250px minmax(0,1fr)}}
+        @media(min-width:1280px){.shell{grid-template-columns:250px minmax(0,1fr) 368px}}
+        .pane{min-width:0}
+        .pane-outline{border-bottom:1px solid var(--line);padding:12px 12px 0}
+        .pane-editor{padding:0 0 24px}
+        .pane-json{border-top:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;max-height:420px}
+        @media(min-width:900px){
+          .pane-outline{position:sticky;top:0;border-bottom:0;border-right:1px solid var(--line);height:calc(100vh - 57px);overflow:auto;padding-top:14px}
+          .pane-json{grid-column:1/-1}
+        }
+        @media(min-width:1280px){
+          .pane-json{grid-column:auto;border-top:0;border-left:1px solid var(--line);max-height:none;position:sticky;top:0;height:calc(100vh - 57px)}
+        }
+        .pane-head{
+          display:flex;align-items:center;justify-content:space-between;gap:8px;
+          padding:8px 12px;border-bottom:1px solid var(--line-soft);
+        }
+        .pane-title{font-size:11px;letter-spacing:.12em;color:var(--muted);font-family:var(--mono)}
+        .pane-meta{font-size:10.5px;color:var(--dim);font-family:var(--mono)}
+        .pane-actions{display:flex;gap:5px}
+        .pane-actions .mini{border:1px solid var(--line);background:var(--raise);border-radius:var(--r);padding:3px 7px;font-size:11px;color:var(--muted)}
+        .pane-actions .mini:hover{color:var(--text);border-color:#3A4756}
+
+        /* ===== 结构总览 ===== */
+        .outline{padding:8px 0}
+        .out-task{margin-bottom:6px}
+        .out-task-title{display:flex;align-items:baseline;gap:6px;padding:6px 4px 4px;font-size:11px;color:var(--dim);font-family:var(--mono);letter-spacing:.03em}
+        .out-state{
+          display:flex;align-items:center;gap:7px;width:100%;text-align:left;
+          padding:5px 8px;border-radius:var(--r);font-size:12.5px;color:var(--muted);
+          border:1px solid transparent;
+        }
+        .out-state:hover{background:var(--raise);color:var(--text)}
+        .out-state.on{background:var(--raise2);border-color:#3B4757;color:var(--text)}
+        .out-state .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+        .out-state .ty{font-family:var(--mono);font-size:9.5px;color:var(--dim);flex:none}
+        .out-sub{padding-left:14px;border-left:1px dashed var(--line);margin-left:9px}
+        .dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--dim)}
+        .dot.begin{background:var(--teal)}
+        .dot.end{background:var(--violet)}
+        .dot.custom{background:var(--muted)}
+        .out-empty{font-size:12px;color:var(--dim);padding:8px 4px}
+
+        /* ===== 校验 ===== */
+        .checks{border-top:1px solid var(--line-soft);margin-top:10px;padding:10px 0 14px}
+        .checks-head{display:flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.1em;color:var(--muted);font-family:var(--mono);padding:0 4px 8px}
+        .chk-count{font-size:10px;padding:1px 5px;border-radius:2px;border:1px solid var(--line);color:var(--muted)}
+        .chk{display:flex;gap:7px;align-items:flex-start;width:100%;text-align:left;padding:5px 6px;border-radius:var(--r);font-size:12px;line-height:1.45;color:#C4CFDA}
+        .chk:hover{background:var(--raise)}
+        .chk .tag{font-family:var(--mono);font-size:9.5px;padding:1px 4px;border-radius:2px;flex:none;margin-top:2px}
+        .chk.error .tag{background:#3A1D1B;color:#F09A92}
+        .chk.warn .tag{background:#2F2A16;color:#EBC97E}
+        .chk.ok{padding-left:6px}
+        .checks-ok{font-size:12px;color:var(--teal);padding:3px 6px;display:flex;align-items:center;gap:6px}
+
+        /* ===== 编辑器 ===== */
+        .editor-head{
+          display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
+          padding:12px 14px;border-bottom:1px solid var(--line-soft);background:var(--panel);
+        }
+        @media(min-width:900px){.editor-head{position:sticky;top:0;z-index:8}}
+        .field{display:flex;align-items:center;gap:8px;flex:1 1 240px;min-width:0}
+        .field label{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:.06em;flex:none}
+        #taskName{flex:1;min-width:0;font-size:15px;font-weight:500;background:transparent;border:1px solid transparent;padding:4px 6px}
+        #taskName:hover{border-color:var(--line)}
+        #taskName:focus{border-color:var(--amber);background:var(--raise)}
+        .addbar{display:flex;align-items:center;gap:6px;flex:none}
+        .addbar .lbl{font-size:11px;color:var(--dim);font-family:var(--mono)}
+        .addbar button{
+          border:1px solid var(--line);background:var(--raise);border-radius:var(--r);
+          padding:4px 9px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;
+        }
+        .addbar button:hover{border-color:#3A4756;color:var(--text)}
+        .addbar button .dot{width:6px;height:6px}
+        .editor{padding:14px 14px 0}
+        .states{display:flex;flex-direction:column;gap:10px}
+        .states.nested{gap:8px}
+
+        .state{
+          position:relative;background:var(--panel);border:1px solid var(--line);border-radius:4px;
+          overflow:hidden;
+        }
+        .state-bar{position:absolute;left:0;top:0;bottom:0;width:2px}
+        .state-bar.begin{background:var(--teal)}
+        .state-bar.end{background:var(--violet)}
+        .state-bar.custom{background:#4A5867}
+        .state-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:9px 10px 9px 13px;border-bottom:1px solid var(--line-soft);background:var(--raise)}
+        .state-name{
+          flex:1 1 130px;min-width:90px;background:transparent;border:1px solid transparent;
+          font-size:14px;font-weight:600;padding:3px 6px;
+        }
+        .state-name-ro{flex:1 1 130px;min-width:0;font-size:14px;font-weight:600;padding:3px 6px;color:var(--muted);letter-spacing:.02em}
+        .state-name:hover{border-color:var(--line)}
+        .state-name:focus{border-color:var(--amber);background:var(--ink)}
+
+        .seg{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;flex:none}
+        .seg-btn{padding:3px 9px;font-size:11.5px;color:var(--dim);background:var(--panel)}
+        .seg-btn.on{background:#2A2314;color:#EFC77C}
+        .seg-btn:not(.on):hover{background:var(--raise2);color:var(--text)}
+        .state-ops{display:flex;gap:2px;flex:none}
+        .icon{
+          width:24px;height:24px;display:flex;align-items:center;justify-content:center;
+          border-radius:var(--r);color:var(--dim);font-size:13px;line-height:1;border:1px solid transparent;
+        }
+        .icon:hover{background:var(--raise2);border-color:var(--line);color:var(--text)}
+        .icon.danger:hover{color:var(--red);border-color:#4A2724}
+        .state-body{padding:10px 10px 11px 13px}
+
+        .rules{display:flex;flex-direction:column;gap:9px}
+        .rule{background:var(--ink);border:1px solid var(--line-soft);border-radius:3px}
+        .rule-head{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--line-soft)}
+        .rule-tag{font-family:var(--mono);font-size:10.5px;color:var(--amber);letter-spacing:.06em}
+        .rule-head .mini{
+          font-size:11px;color:var(--dim);padding:2px 6px;border-radius:2px;border:1px solid transparent;margin-left:auto;
+        }
+        .rule-head .mini:hover{color:var(--text);border-color:var(--line);background:var(--raise)}
+        .rule-head .mini.danger:hover{color:var(--red)}
+        .switch-chip{
+          font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.04em;
+          padding:1px 6px;border:1px solid var(--line-soft);border-radius:2px;
+        }
+        .switch-chip:hover{color:var(--muted);border-color:var(--line)}
+        .switch-chip.on{color:#EFC77C;border-color:#4A3C1D;background:#2A2314}
+        .rule-grid{display:grid;grid-template-columns:1fr;gap:0}
+        @media(min-width:700px){.rule-grid{grid-template-columns:1fr 1fr}}
+        .sect{padding:8px;min-width:0}
+        @media(min-width:700px){.sect+.sect{border-left:1px solid var(--line-soft)}}
+        .sect-head{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+        .sect-label{font-size:11px;letter-spacing:.08em;color:var(--muted);font-family:var(--mono)}
+        .sect-hint{font-size:10px;color:var(--dim);font-family:var(--mono)}
+        .sect-hint.cond{color:#5EADA1}
+        .sect-hint.act{color:#C29753}
+        .mini-clear{
+          margin-left:auto;font-size:10px;font-family:var(--mono);color:var(--dim);
+          padding:1px 5px;border:1px solid var(--line-soft);border-radius:2px;line-height:1.4;
+        }
+        .mini-clear:hover{color:var(--text);border-color:#3A4756}
+        .rows{display:flex;flex-direction:column;gap:5px}
+        .line{
+          display:grid;grid-template-columns:88px minmax(0,1fr) 22px;gap:5px;align-items:start;
+          padding:4px;border-radius:3px;background:var(--panel);
+        }
+        .line:focus-within{background:var(--raise)}
+        .line .type{padding:3px 4px;font-size:11.5px}
+        .line .params{display:flex;flex-wrap:wrap;gap:4px 6px;min-width:0}
+        .param{display:flex;align-items:center;gap:3px;min-width:0}
+        .param>span{font-family:var(--mono);font-size:10px;color:var(--dim);flex:none;white-space:nowrap}
+        .param input,.param select{padding:3px 5px;font-size:11.5px;border-radius:2px;background:var(--raise);border-color:var(--line-soft);min-width:0}
+        .param input{width:100%}
+        .param.txt{flex:1 1 104px}
+        .param.num{flex:1 1 96px}
+        .param.sel{flex:0 1 84px}
+        .param.txt.mono input{font-family:var(--mono)}
+        .param.bool{flex:0 0 auto;gap:5px}
+        .param.bool input{width:13px;height:13px;accent-color:var(--amber);margin:0}
+        .line .rm{width:22px;height:22px;color:var(--dim);border-radius:2px;font-size:12px;display:flex;align-items:center;justify-content:center}
+        .line .rm:hover{color:var(--red);background:var(--raise2)}
+        .add-line{
+          margin-top:6px;width:100%;padding:5px;border:1px dashed var(--line);border-radius:3px;
+          font-size:11.5px;color:var(--dim);text-align:center;
+        }
+        .add-line:hover{border-color:#3C4A59;color:var(--muted);background:var(--panel)}
+        .empty-hint{font-size:11.5px;color:var(--dim);padding:4px 6px;font-style:normal}
+        /* 引用状态：单列表单，路径独占一行 */
+        .inc-body{display:flex;flex-direction:column;gap:7px;padding:1px 0 0}
+        .inc-body .param{display:flex;align-items:center;gap:7px}
+        .inc-body .param>span{width:52px;flex:none}
+        .inc-body .param.txt,.inc-body .param.sel{flex:none;width:100%}
+        .inc-body .param input,.inc-body .param select{flex:1 1 auto;width:100%;padding:5px 7px;font-size:12px}
+        .inc-body .param input{font-family:var(--mono)}
+        .inc-body .empty-hint{padding:0;line-height:1.6}
+        .terminal-note{display:flex;gap:8px;align-items:baseline;padding:8px 10px;border:1px solid var(--line-soft);border-radius:3px;background:rgba(255,255,255,.02);font-size:11.5px;color:var(--dim)}
+        .terminal-note b{font-weight:500;color:var(--muted);font-family:var(--mono);letter-spacing:.04em}
+        .next-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:7px 8px;border-top:1px solid var(--line-soft);background:rgba(255,255,255,.02)}
+        .next-label{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:.06em}
+        .next-sel{flex:1 1 130px;min-width:0;padding:3px 6px;font-size:12px}
+        .next-sel.bad{border-color:#5B2F2B;color:#E8A29B}
+        .next-warn{font-size:10.5px;color:var(--red);font-family:var(--mono)}
+        .next-arrow{color:var(--amber);font-family:var(--mono);font-size:12px}
+
+        /* 子任务 */
+        .subtask{border:1px solid var(--line-soft);border-radius:3px;background:var(--ink);margin-bottom:8px}
+        .subtask-head{display:flex;align-items:center;gap:7px;padding:6px 8px;border-bottom:1px solid var(--line-soft)}
+        .sub-mark{font-size:10px;font-family:var(--mono);color:#9FB4C4;background:#1A2836;border:1px solid #27384A;padding:1px 5px;border-radius:2px;flex:none;margin-right:auto}
+        .sub-hint{font-size:10.5px;color:var(--dim);font-family:var(--mono)}
+        .sub-body{padding:8px 8px 9px}
+        .sub-empty{font-size:11.5px;color:var(--dim);padding:6px 2px}
+        .addbar.sm{padding:0;gap:4px;margin-top:6px}
+        .addbar.sm .lbl{font-size:10px}
+        .addbar.sm button{padding:2px 7px;font-size:11px}
+        .editor-foot{padding:14px 14px 0;font-size:11px;color:var(--dim);font-family:var(--mono);line-height:1.7}
+        .editor-foot b{color:var(--muted);font-weight:400}
+
+        .empty-state{padding:40px 20px;text-align:center;border:1px dashed var(--line);border-radius:4px;margin:14px}
+        .empty-state p{color:var(--muted);font-size:13px;margin-bottom:12px}
+        .empty-state .hint{color:var(--dim);font-size:11.5px;font-family:var(--mono);margin-top:10px}
+
+        /* JSON */
+        .json{
+          flex:1;overflow:auto;padding:12px 12px 20px;margin:0;
+          font-family:var(--mono);font-size:11.5px;line-height:1.7;
+          white-space:pre-wrap;word-break:break-word;
+          color:#CBD6E1;background:var(--panel);
+          -moz-tab-size:2;tab-size:2;min-height:120px;
+        }
+        .j-key{color:#8EB8CE}
+        .j-str{color:#C8B27A}
+        .j-num{color:#9BB7E2}
+        .j-kw{color:#A98CD6}
+
+        /* toast */
+        .toast{
+          position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);
+          background:#243040;border:1px solid #3C4A59;color:var(--text);
+          padding:8px 14px;border-radius:4px;font-size:12.5px;z-index:40;
+          opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;max-width:80vw;
+        }
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+
+        @media(max-width:520px){
+          .brand-txt p{display:none}
+          .topbar{padding:9px 10px;gap:8px}
+          .editor-head{padding:10px}
+          .editor{padding:10px 10px 0}
+          .line{grid-template-columns:80px minmax(0,1fr) 22px}
+          .state-head{gap:6px;padding:8px}
+          .state-name{flex-basis:100%}
+          .state-ops{margin-left:0}
+          .seg{margin-left:auto}
+        }
+        @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+    </style>
+</head>
+<body>
+
+<header class="topbar">
+    <div class="brand">
+        <svg viewBox="0 0 32 32" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="6" fill="#161C24" stroke="#2A3441"/>
+            <circle cx="9" cy="16" r="3.4" fill="#4FB2A2"/>
+            <circle cx="23" cy="9" r="3" fill="#E0A242"/>
+            <circle cx="23" cy="23" r="3" fill="#9A8CE0"/>
+            <path d="M12 16h5m0 0 3-5m-3 5 3 5" stroke="#8A97A6" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+        </svg>
+        <div class="brand-txt">
+            <h1>任务脚本编辑器</h1>
+            <p>STATE · RULE · ACTION</p>
+        </div>
+    </div>
+    <nav class="taskbar" id="taskTabs" aria-label="任务列表"></nav>
+    <div class="top-actions">
+        <button class="btn" id="btnNewTask">新建任务</button>
+        <button class="btn primary" id="btnExport">导出 JSON</button>
+    </div>
+</header>
+
+<main class="shell">
+    <!-- ===== 左：结构总览 + 校验 ===== -->
+    <aside class="pane pane-outline">
+        <div class="pane-head">
+            <span class="pane-title">结构总览</span>
+            <span class="pane-meta" id="stats">—</span>
+        </div>
+        <div class="outline" id="outline"></div>
+        <div class="checks">
+            <div class="checks-head"><span>校验</span><span class="chk-count" id="chkCount">0</span></div>
+            <div id="checks"></div>
+        </div>
+    </aside>
+
+    <!-- ===== 中：编辑器 ===== -->
+    <section class="pane pane-editor">
+        <div class="editor-head">
+            <div class="field">
+                <label for="taskName">任务名</label>
+                <input id="taskName" type="text" spellcheck="false" placeholder="任务名">
+            </div>
+            <div class="addbar">
+                <span class="lbl">开始 / 结束自动创建</span>
+                <button data-act="add-state"><span class="dot custom"></span>＋ 新增状态</button>
+            </div>
+        </div>
+        <div class="editor" id="editor"></div>
+        <div class="editor-foot">
+            <b>结构：</b>开始 → 自定义… → 结束，开始/结束自动创建、名称固定（内容照常可编辑）<br>
+            <b>语义：</b>开始是入口，其规则决定流程走向；结束是终止，走到此处即停<br>
+            <b>规则：</b>条件集 + 行动集 + 下一状态 + 切号标记<br>
+            <b>引用：</b>状态可选「引用」，只存路径（相对 任务/，不写 .json 后缀）与返回状态；运行时读该文件当子任务，跑完文件里的「结束」回到该返回状态<br>
+            <b>默认空值：</b>无条件 = 条件为空（恒成立）· 无行动 = 行动为空（不执行操作）<br>
+            <b>类型注册表：</b>条件对齐 server/condition 的 7 个类 · 行动对齐 server/action 的 27 个类，可继续扩展<br>
+            <b>文件：</b>一个任务一个 json（文件名为任务名，内容就是该任务的 states）；多任务导出打包成 zip，导入支持 json / zip
+        </div>
+    </section>
+
+    <!-- ===== 右：JSON ===== -->
+    <aside class="pane pane-json">
+        <div class="pane-head">
+            <span class="pane-title" id="jsonTitle">JSON 预览</span>
+            <div class="pane-actions">
+                <button class="mini" id="btnCopy">复制</button>
+                <button class="mini" id="btnDownload">下载</button>
+                <button class="mini" id="btnImport">导入</button>
+                <input type="file" id="fileInput" accept=".json,.zip,application/json" multiple hidden>
+            </div>
+        </div>
+        <pre class="json" id="jsonOut"></pre>
+    </aside>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    (function(){
+    "use strict";
+
+    /* ========== 类型注册表（新增类型只需在这里加一条） ========== */
+    var CONDITION_TYPES = {
+      FindImage: { label:"找图", cls:"FindImage", wrap:"image", params:[
+        { key:"name",      label:"图片",   ui:"text",   def:"",    ph:"离开场景" },
+        { key:"threshold", label:"阈值",   ui:"num",    def:0.95,  step:0.01 },
+        { key:"region",    label:"区域",   ui:"region", def:"",    ph:"left,top,w,h" },
+        { key:"x_offset",  label:"X 偏移", ui:"num",    def:0,     step:1 },
+        { key:"y_offset",  label:"Y 偏移", ui:"num",    def:0,     step:1 }
+      ]},
+      FindText: { label:"找字", cls:"FindText", wrap:"text", params:[
+        { key:"name",        label:"文字", ui:"text",   def:"",    ph:"确定" },
+        { key:"colors",      label:"颜色", ui:"colors", def:"",    ph:"0,0,0；多色用 ; 分隔" },
+        { key:"region",      label:"区域", ui:"region", def:"",    ph:"left,top,w,h" },
+        { key:"tolerance",   label:"容差", ui:"num",    def:2,     step:1 },
+        { key:"bitwise_not", label:"反选", ui:"bool",   def:false },
+        { key:"x_offset",    label:"X 偏移", ui:"num",  def:0,     step:1 },
+        { key:"y_offset",    label:"Y 偏移", ui:"num",  def:0,     step:1 }
+      ]},
+      Equal: { label:"等于", cls:"Equal", params:[
+        { key:"key",      label:"变量",   ui:"text", def:"",    ph:"server" },
+        { key:"value",    label:"值",     ui:"text", def:"",    ph:"1" },
+        { key:"all_task", label:"全局变量", ui:"bool", def:false }
+      ]},
+      Less: { label:"小于", cls:"Less", params:[
+        { key:"key",   label:"变量", ui:"text", def:"", ph:"count" },
+        { key:"value", label:"值",   ui:"num",  def:0,  step:1 }
+      ]},
+      First: { label:"首元素", cls:"First", params:[
+        { key:"key",   label:"变量", ui:"text", def:"", ph:"target" },
+        { key:"value", label:"等于", ui:"text", def:"", ph:"张三" }
+      ]},
+      Length: { label:"长度", cls:"Length", params:[
+        { key:"key",    label:"变量", ui:"text", def:"", ph:"target" },
+        { key:"length", label:"等于", ui:"num",  def:0,  step:1 }
+      ]},
+      NearAnchor: { label:"靠近锚点", cls:"NearAnchor", params:[
+        { key:"x_range", label:"X 容差", ui:"num", def:"", step:1, ph:"空 = 不限" },
+        { key:"y_range", label:"Y 容差", ui:"num", def:"", step:1, ph:"空 = 不限" }
+      ]}
+    };
+
+    /* 行动注册表：对齐 server/action 的 24 个实现类；参数名 = 构造参数名，时间单位 = 秒 */
+    var ACTION_TYPES = {
+      Move: { label:"移动鼠标", cls:"Move", group:"鼠标", params:[
+        { key:"point", label:"目标点", ui:"point", def:"", ph:"x,y · 空 = 识别点" },
+        { key:"delay", label:"延时(秒)", ui:"num", def:0.2, step:0.1 }
+      ]},
+      LeftClick: { label:"左键点击", cls:"LeftClick", group:"鼠标", params:[
+        { key:"times", label:"次数", ui:"num", def:1, step:1 },
+        { key:"delay", label:"延时(秒)", ui:"num", def:0.5, step:0.1 }
+      ]},
+      RightClick: { label:"右键点击", cls:"RightClick", group:"鼠标", params:[
+        { key:"times", label:"次数", ui:"num", def:1, step:1 },
+        { key:"delay", label:"延时(秒)", ui:"num", def:0.5, step:0.1 }
+      ]},
+      RightPress: { label:"右键按下", cls:"RightPress", group:"鼠标", params:[] },
+      RightRelease: { label:"右键释放", cls:"RightRelease", group:"鼠标", params:[] },
+      ScrollUp: { label:"滚轮向上", cls:"ScrollUp", group:"鼠标", params:[
+        { key:"steps", label:"格数", ui:"num", def:24, step:1 },
+        { key:"delay", label:"延时(秒)", ui:"num", def:1, step:0.1 }
+      ]},
+      ScrollDown: { label:"滚轮向下", cls:"ScrollDown", group:"鼠标", params:[
+        { key:"steps", label:"格数", ui:"num", def:24, step:1 },
+        { key:"delay", label:"延时(秒)", ui:"num", def:1, step:0.1 }
+      ]},
+      Anchor: { label:"记录锚点", cls:"Anchor", group:"鼠标", params:[] },
+      Location: { label:"记录鼠标位置", cls:"Location", group:"鼠标", params:[] },
+
+      KeyboardPress: { label:"按键按下", cls:"KeyboardPress", group:"键盘", params:[
+        { key:"key", label:"键名", ui:"text", def:"", ph:"Alt / Shift / A", required:true }
+      ]},
+      KeyboardRelease: { label:"按键释放", cls:"KeyboardRelease", group:"键盘", params:[
+        { key:"key", label:"键名", ui:"text", def:"", ph:"Alt / Shift / A", required:true }
+      ]},
+      Ctrl: { label:"Ctrl + 键", cls:"Ctrl", group:"键盘", params:[
+        { key:"key", label:"键名", ui:"text", def:"", ph:"C / V / Tab", required:true },
+        { key:"delay", label:"延时(秒)", ui:"num", def:0.5, step:0.1 }
+      ]},
+      Alt: { label:"Alt + 键", cls:"Alt", group:"键盘", params:[
+        { key:"key", label:"键名", ui:"text", def:"", ph:"Q / Tab", required:true },
+        { key:"delay", label:"延时(秒)", ui:"num", def:1, step:0.1 }
+      ]},
+      F: { label:"功能键 F", cls:"F", group:"键盘", params:[
+        { key:"key", label:"序号", ui:"num", def:1, step:1, ph:"1-12" },
+        { key:"delay", label:"延时(秒)", ui:"num", def:0.5, step:0.1 }
+      ]},
+      Esc: { label:"Esc", cls:"Esc", group:"键盘", params:[
+        { key:"times", label:"次数", ui:"num", def:1, step:1 },
+        { key:"delay", label:"延时(秒)", ui:"num", def:1, step:0.1 }
+      ]},
+      Enter: { label:"回车", cls:"Enter", group:"键盘", params:[
+        { key:"delay", label:"延时(秒)", ui:"num", def:1, step:0.1 }
+      ]},
+      Input: { label:"输入文本", cls:"Input", group:"键盘", params:[
+        { key:"text", label:"文本", ui:"text", def:"", ph:"要键入的内容", required:true },
+        { key:"delay", label:"延时(秒)", ui:"num", def:0.2, step:0.1 }
+      ]},
+
+      SetValue: { label:"变量赋值", cls:"SetValue", group:"变量", params:[
+        { key:"key", label:"变量", ui:"text", def:"", ph:"hp", required:true },
+        { key:"value", label:"值", ui:"text", def:"", ph:"留空 = 空字符串" }
+      ]},
+      AppendValue: { label:"变量追加", cls:"AppendValue", group:"变量", params:[
+        { key:"key", label:"变量", ui:"text", def:"", ph:"target", required:true },
+        { key:"value", label:"值", ui:"text", def:"", ph:"追加的元素" }
+      ]},
+      Pop: { label:"变量弹出", cls:"Pop", group:"变量", params:[
+        { key:"key", label:"变量", ui:"text", def:"", ph:"target", required:true }
+      ]},
+      IncreaseValue: { label:"变量 +1", cls:"IncreaseValue", group:"变量", params:[
+        { key:"key", label:"变量", ui:"text", def:"", ph:"count", required:true }
+      ]},
+      ResetValue: { label:"清除变量", cls:"ResetValue", group:"变量", params:[
+        { key:"key", label:"变量", ui:"text", def:"", ph:"hp", required:true },
+        { key:"all_task", label:"全局变量", ui:"bool", def:false }
+      ]},
+
+      CaptureImage: { label:"截图存图片", cls:"CaptureImage", group:"采集", wrap:"image", params:[
+        { key:"name", label:"名称", ui:"text", def:"", ph:"模板名", required:true },
+        { key:"region", label:"区域", ui:"region", def:"", ph:"left,top,w,h · 空 = 全窗口" }
+      ]},
+      CaptureText: { label:"截图存文字", cls:"CaptureText", group:"采集", wrap:"text", params:[
+        { key:"name", label:"名称", ui:"text", def:"", ph:"模板名", required:true },
+        { key:"colors", label:"颜色", ui:"colors", def:"", ph:"0,0,0 ; 多个用分号" },
+        { key:"region", label:"区域", ui:"region", def:"", ph:"left,top,w,h · 空 = 全窗口" },
+        { key:"tolerance", label:"容差", ui:"num", def:2, step:1 },
+        { key:"bitwise_not", label:"反选", ui:"bool", def:false }
+      ]},
+
+      Wait: { label:"等待", cls:"Wait", group:"流程", params:[
+        { key:"seconds", label:"时长(秒)", ui:"num", def:1, step:0.1, required:true }
+      ]},
+      Beep: { label:"蜂鸣", cls:"Beep", group:"流程", params:[] },
+      Message: { label:"发送提醒", cls:"Message", group:"流程", params:[
+        { key:"header", label:"标题", ui:"text", def:"", ph:"任务提醒", required:true },
+        { key:"content", label:"内容", ui:"text", def:"", ph:"正文", required:true }
+      ]}
+    };
+
+    var KIND_LABEL = { begin:"开始", custom:"自定义", end:"结束" };
+
+    /* 每个状态列表固定为：开始 + 自定义… + 结束（开始/结束自动创建、不可删除） */
+
+    /* ========== 数据 ========== */
+    var APP = { tasks:[], activeTask:null };
+    var seq = 0;
+    function nid(p){ seq++; return p + seq.toString(36); }
+    function esc(v){ return String(v==null?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+    function pad(n){ return (n<9?"0":"") + (n+1); }
+
+    function getAt(path){
+      var keys = String(path).split(".");
+      var o = APP;
+      for(var i=0;i<keys.length;i++){ if(o==null) return undefined; o = o[keys[i]]; }
+      return o;
+    }
+    function setAt(path, val){
+      var keys = String(path).split(".");
+      var o = APP;
+      for(var i=0;i<keys.length-1;i++){ o = o[keys[i]]; if(o==null) return; }
+      o[keys[keys.length-1]] = val;
+    }
+    function activeTaskIndex(){ for(var i=0;i<APP.tasks.length;i++){ if(APP.tasks[i].id===APP.activeTask) return i; } return -1; }
+    function task(){ var i = activeTaskIndex(); return i<0 ? null : APP.tasks[i]; }
+    function taskPath(){ return "tasks." + activeTaskIndex(); }
+
+    /* 超大任务保护：脚本批量生成的任务会到上万状态，卡片式编辑器扛不住 */
+    var MAX_EDIT_STATES = 1500;
+    function countStates(states){
+      var total = 0, rules = 0;
+      (function walk(list){
+        (list || []).forEach(function(s){
+          total++;
+          if(s.mode === "subtasks" && s.subtask) walk(s.subtask.states);
+          else rules += (s.rules || []).length;
+        });
+      })(states);
+      return { states:total, rules:rules };
+    }
+
+    function blankParams(schema){
+      var o = {};
+      schema.params.forEach(function(pr){ o[pr.key] = pr.def; });
+      return o;
+    }
+    /* 区域：编辑态存 "left,top,w,h" 字符串，导出为四元数组，空为 null */
+    function parseRegion(v){
+      if(Array.isArray(v)) return v.length === 4 ? v.map(Number) : null;
+      var nums = String(v == null ? "" : v).split(/[,，\s]+/).filter(function(x){ return x !== ""; });
+      if(nums.length !== 4) return null;
+      var arr = nums.map(Number);
+      for(var i = 0; i < 4; i++){ if(!isFinite(arr[i])) return null; }
+      return arr;
+    }
+    function formatRegion(v){
+      return Array.isArray(v) && v.length === 4 ? v.join(",") : (v == null ? "" : String(v));
+    }
+    /* 目标点：编辑态存 "x,y"，导出为二元数组，空为 null（用识别坐标） */
+    function parsePoint(v){
+      if(Array.isArray(v)) return v.length === 2 && v.every(function(n){ return isFinite(Number(n)); }) ? v.map(Number) : null;
+      var nums = String(v == null ? "" : v).split(/[,，\s]+/).filter(function(x){ return x !== ""; });
+      if(nums.length !== 2) return null;
+      var arr = nums.map(Number);
+      return (isFinite(arr[0]) && isFinite(arr[1])) ? arr : null;
+    }
+    function formatPoint(v){
+      return Array.isArray(v) && v.length === 2 ? v.join(",") : (v == null ? "" : String(v));
+    }
+    /* 颜色：编辑态存 "0,0,0; 255,255,0"，导出为 [[r,g,b], ...] */
+    function parseColors(v){
+      if(Array.isArray(v)) return v.map(function(c){ return Array.isArray(c) ? c.map(Number) : []; });
+      var out = [];
+      String(v == null ? "" : v).split(/[;；]+/).forEach(function(seg){
+        seg = seg.trim();
+        if(!seg) return;
+        var nums = seg.split(/[,，\s]+/).map(Number);
+        if(nums.length >= 3 && nums.slice(0, 3).every(function(n){ return isFinite(n); })) out.push(nums.slice(0, 3));
+      });
+      return out;
+    }
+    function formatColors(v){
+      if(Array.isArray(v)) return v.map(function(c){ return Array.isArray(c) ? c.join(",") : String(c); }).join("; ");
+      return v == null ? "" : String(v);
+    }
+    function uniqueName(arr, base){
+      var names = arr.map(function(x){ return String(x.name||"").trim(); });
+      var n = base, i = 2;
+      while(names.indexOf(n) >= 0){ n = base + " " + i; i++; }
+      return n;
+    }
+    function newState(kind, arr, name){
+      var base = kind==="begin" ? "开始" : (kind==="end" ? "结束" : "状态");
+      var st = {
+        id:nid("st"), name:name || uniqueName(arr, base), kind:kind,
+        mode:"rules", rules:[], subtask:{ states:[] }, path:"", next:""
+      };
+      if(kind !== "end") st.rules.push(newRule(kind));
+      return st;
+    }
+    function newRule(kind){
+      return {
+        id:nid("r"),
+        conditions: [],
+        actions: [],
+        next:"",
+        switch:false
+      };
+    }
+
+    /* ========== 渲染：顶栏任务切换 ========== */
+    function renderTabs(){
+      var nav = document.getElementById("taskTabs");
+      if(!APP.tasks.length){ nav.innerHTML = ""; return; }
+      nav.innerHTML = APP.tasks.map(function(t){
+        var on = t.id === APP.activeTask;
+        var count = t.states.length;
+        return '<div class="tab" role="button" tabindex="0" data-act="select-task" data-id="' + t.id + '" aria-current="' + on + '">'
+          + '<span class="tab-name">' + esc(t.name || "未命名任务") + '</span>'
+          + '<span class="tab-n">' + count + '</span>'
+          + '<span class="tab-x" role="button" tabindex="0" data-act="del-task" data-id="' + t.id + '" aria-label="删除任务">×</span>'
+          + '</div>';
+      }).join("");
+    }
+
+    /* ========== 渲染：结构总览 ========== */
+    function renderOutline(){
+      var el = document.getElementById("outline");
+      var t = task();
+      if(!t){ el.innerHTML = '<p class="out-empty">暂无任务</p>'; return; }
+      var html = '<div class="out-task"><div class="out-task-title">TASK · ' + esc(t.name || "未命名") + '</div>';
+      var stat = countStates(t.states);
+      if(!t.states.length){ html += '<p class="out-empty">暂无状态</p>'; }
+      else if(stat.states > MAX_EDIT_STATES){
+        html += '<p class="out-empty">' + stat.states + ' 个状态 · ' + stat.rules + ' 条规则，过大未展开</p>';
+      } else {
+        t.states.forEach(function(s){
+          html += outState(s, 0);
+          if(s.mode === "subtasks"){
+            var sub = s.subtask || { states:[] };
+            html += '<div class="out-sub">';
+            html += '<div class="out-task-title">子任务</div>';
+            if(!sub.states.length) html += '<p class="out-empty">空</p>';
+            sub.states.forEach(function(ss){ html += outState(ss, 1); });
+            html += '</div>';
+          }
+        });
+      }
+      html += '</div>';
+      el.innerHTML = html;
+    }
+    function outState(s, lvl){
+      var core = s.mode === "subtasks" ? "子任务"
+        : (s.mode === "include" ? "引用 " + (String(s.path || "").split("/").pop() || "?") : "规则 " + s.rules.length);
+      var ty = s.kind === "begin" ? "入口/" + core : (s.kind === "end" ? "终止/" + core : core);
+      return '<button class="out-state" data-act="goto" data-id="' + s.id + '">'
+        + '<span class="dot ' + s.kind + '"></span>'
+        + '<span class="nm">' + esc(s.name || "未命名") + '</span>'
+        + '<span class="ty">' + ty + '</span>'
+        + '</button>';
+    }
+
+    /* ========== 渲染：校验 ========== */
+    function collectChecks(t){
+      var out = [];
+      function nm(s){ return String(s.name || "未命名").trim(); }
+      function walk(states, prefix, parentNames){
+        var names = states.map(function(s){ return String(s.name||"").trim(); });
+        var exits = [];
+        var seen = {};
+        states.forEach(function(s){
+          var n = String(s.name||"").trim();
+          if(!n) out.push({ level:"error", text:prefix + "存在未命名的状态", id:s.id });
+          else if(seen[n]) out.push({ level:"error", text:prefix + "状态名「" + n + "」重复", id:s.id });
+          seen[n] = true;
+        });
+        states.forEach(function(s, si){
+          if(!s.name) return;
+          // 顶层「结束」是任务终点，其规则不会执行，也不再参与校验
+          if(s.kind === "end" && !parentNames) return;
+          if(s.mode === "include"){
+            var path = String(s.path || "").trim();
+            var back = String(s.next || "").trim();
+            if(!path){
+              out.push({ level:"error", text:prefix + "「" + nm(s) + "」引用子任务没有填路径", id:s.id });
+            } else if(/^[\\/]/.test(path) || /^[A-Za-z]:/.test(path) || path.indexOf("..") >= 0){
+              out.push({ level:"error", text:prefix + "「" + nm(s) + "」引用路径要写相对 任务/ 目录的路径，不能是绝对路径或含 ..", id:s.id });
+            }
+            if(!back){
+              out.push({ level:"warn", text:prefix + "「" + nm(s) + "」引用子任务没有返回状态，文件「结束」不会跳走", id:s.id });
+            } else if(names.indexOf(back) < 0){
+              out.push({ level:"error", text:prefix + "「" + nm(s) + "」返回状态「" + back + "」不在本层", id:s.id });
+            }
+            exits.push(back);
+            return;
+          }
+          if(s.mode === "rules"){
+            s.rules.forEach(function(r, ri){
+              var next = String(r.next||"").trim();
+              var scoped = s.kind === "end" && parentNames && parentNames.length ? parentNames : names;
+              if(!next) out.push({ level:"error", text:prefix + "「" + nm(s) + "」规则 " + (ri+1) + " 未设置下一状态", id:s.id });
+              else if(scoped.indexOf(next) < 0) out.push({ level:"error", text:prefix + "「" + nm(s) + "」规则 " + (ri+1) + " 的下一状态「" + next + "」" + (scoped === parentNames ? "不在父层" : "不存在"), id:s.id });
+              if(s.kind === "end") exits.push(next);
+              r.conditions.forEach(function(c){
+                if(c.type === "FindImage" && !String(c.params.name||"").trim()){
+                  out.push({ level:"error", text:prefix + "「" + nm(s) + "」规则 " + (ri+1) + " 的找图未指定图片", id:s.id });
+                }
+                if(c.type === "FindText"){
+                  if(!String(c.params.name||"").trim()) out.push({ level:"error", text:prefix + "「" + nm(s) + "」规则 " + (ri+1) + " 的找字未指定文字", id:s.id });
+                  else if(parseColors(c.params.colors).length === 0) out.push({ level:"warn", text:prefix + "「" + nm(s) + "」规则 " + (ri+1) + " 的找字未设置颜色", id:s.id });
+                }
+                if(c.type === "NearAnchor" && (c.params.x_range === "" || c.params.x_range == null) && (c.params.y_range === "" || c.params.y_range == null)){
+                  out.push({ level:"warn", text:prefix + "「" + nm(s) + "」规则 " + (ri+1) + " 的靠近锚点未设置任何容差，恒成立", id:s.id });
+                }
+              });
+              r.actions.forEach(function(a){
+                var sc = ACTION_TYPES[a.type];
+                if(!sc) return;
+                var ap = a.params || {};
+                sc.params.forEach(function(pr){
+                  if(pr.required && !String(ap[pr.key] == null ? "" : ap[pr.key]).trim()){
+                    out.push({ level:"error", text:prefix + "「" + nm(s) + "」规则 " + (ri+1) + " 的" + sc.label + "未填写" + pr.label, id:s.id });
+                  }
+                });
+                if(a.type === "Move" && String(ap.point == null ? "" : ap.point).trim() && !parsePoint(ap.point)){
+                  out.push({ level:"error", text:prefix + "「" + nm(s) + "」规则 " + (ri+1) + " 的移动目标点格式不对，应为 x,y", id:s.id });
+                }
+                if(a.type === "CaptureText" && String(ap.name||"").trim() && parseColors(ap.colors).length === 0){
+                  out.push({ level:"warn", text:prefix + "「" + nm(s) + "」规则 " + (ri+1) + " 的截图存文字未设置颜色，无法定位", id:s.id });
+                }
+                if(a.type === "Wait" && Number(ap.seconds) <= 0){
+                  out.push({ level:"warn", text:prefix + "「" + nm(s) + "」规则 " + (ri+1) + " 的等待时长为 0", id:s.id });
+                }
+              });
+            });
+          } else {
+            var sub = s.subtask || { states:[] };
+            if(!sub.states.length) out.push({ level:"warn", text:prefix + "「" + nm(s) + "」的子任务没有任何状态", id:s.id });
+            walk(sub.states, prefix + "子任务 / ", names).forEach(function(n){ if(n) exits.push(n); });
+          }
+        });
+        var targets = {};
+        states.forEach(function(s){
+          if(s.mode !== "rules") return;
+          s.rules.forEach(function(r){ var n = String(r.next||"").trim(); if(n) targets[n] = true; });
+        });
+        exits.forEach(function(n){ targets[n] = true; });
+        var beginState = null;
+        states.forEach(function(s){ if(s.kind === "begin") beginState = s; });
+        if(beginState && beginState.mode === "rules" && !beginState.rules.length){
+          out.push({ level:"warn", text:prefix + "「开始」没有任何规则，流程会停在这里", id:beginState.id });
+        }
+        states.forEach(function(s){
+          if(!s.name) return;
+          var n = String(s.name||"").trim();
+          if(s.kind !== "begin" && !targets[n]) out.push({ level:"warn", text:prefix + "「" + n + "」没有任何规则指向它（不可达）", id:s.id });
+        });
+        return exits;
+      }
+      if(!t.states.length) out.push({ level:"error", text:"任务还没有任何状态" });
+      else walk(t.states, "", null);
+      return out;
+    }
+    function renderChecks(){
+      var t = task();
+      var box = document.getElementById("checks");
+      var cnt = document.getElementById("chkCount");
+      if(!t){ box.innerHTML = '<p class="out-empty">—</p>'; cnt.textContent = "0"; return; }
+      var stat = countStates(t.states);
+      if(stat.states > MAX_EDIT_STATES){
+        cnt.textContent = "—";
+        box.innerHTML = '<p class="out-empty">任务过大（' + stat.states + ' 个状态），跳过校验</p>';
+        return;
+      }
+      var list = collectChecks(t);
+      var errs = list.filter(function(x){ return x.level === "error"; }).length;
+      cnt.textContent = list.length ? (errs ? errs + " error" : list.length + " warn") : "pass";
+      if(!list.length){
+        box.innerHTML = '<div class="checks-ok"><span class="dot begin"></span>结构完整，未发现断链</div>';
+        return;
+      }
+      var show = list.slice(0, 9);
+      var html = show.map(function(it){
+        return '<button class="chk ' + it.level + '" data-act="goto" data-id="' + (it.id||"") + '">'
+          + '<span class="tag">' + (it.level === "error" ? "ERR" : "WARN") + '</span>'
+          + '<span>' + esc(it.text) + '</span></button>';
+      }).join("");
+      if(list.length > show.length) html += '<p class="out-empty">还有 ' + (list.length - show.length) + ' 条…</p>';
+      box.innerHTML = html;
+    }
+    function renderStats(){
+      var t = task();
+      var el = document.getElementById("stats");
+      if(!t){ el.textContent = "—"; return; }
+      var st = 0, ru = 0, co = 0;
+      (function walk(states){
+        st += states.length;
+        states.forEach(function(s){
+          ru += s.rules.length;
+          s.rules.forEach(function(r){ co += r.conditions.length; });
+          if(s.mode === "subtasks" && s.subtask) walk(s.subtask.states);
+        });
+      })(t.states);
+      el.textContent = st + " 状态 · " + ru + " 规则 · " + co + " 条件";
+    }
+
+    /* ========== 渲染：编辑器 ========== */
+    function renderStates(states, path, depth, parentNames){
+      if(!states.length) return '<p class="empty-hint">暂无状态。</p>';
+      return '<div class="states' + (depth > 0 ? " nested" : "") + '">'
+        + states.map(function(s, i){ return renderState(s, path, i, states, depth, parentNames); }).join("")
+        + '</div>';
+    }
+
+    function renderState(s, scopePath, idx, siblings, depth, parentNames){
+      var p = scopePath + "." + idx;
+      var locked = s.kind !== "custom";
+      // 顶层「结束」是任务终点，规则不会被执行，因此不给编辑入口
+      var terminal = depth === 0 && s.kind === "end";
+      var body = terminal
+        ? '<div class="terminal-note"><b>终点</b><span>任务运行到这里即结束，不需要配置规则。</span></div>'
+        : (s.mode === "subtasks" ? renderSubtask(s, p, depth, siblings)
+          : (s.mode === "include" ? renderInclude(s, p, siblings, depth, parentNames) : renderRules(s, p, siblings, depth, parentNames)));
+      var nameField = locked
+        ? '<span class="state-name-ro">' + esc(s.name) + '</span>'
+        : '<input class="state-name" type="text" value="' + esc(s.name) + '" data-path="' + p + '.name" placeholder="状态名" spellcheck="false" aria-label="状态名">';
+      var seg = terminal ? '' : '<div class="seg"><button class="seg-btn ' + (s.mode === "rules" ? "on" : "") + '" data-act="set-mode" data-path="' + p + '.mode" data-val="rules">规则集</button>'
+        + '<button class="seg-btn ' + (s.mode === "subtasks" ? "on" : "") + '" data-act="set-mode" data-path="' + p + '.mode" data-val="subtasks">子任务</button>'
+        + '<button class="seg-btn ' + (s.mode === "include" ? "on" : "") + '" data-act="set-mode" data-path="' + p + '.mode" data-val="include">引用</button></div>';
+      var ops = locked
+        ? ''
+        : '<button class="icon danger" data-act="del-state" data-scope="' + scopePath + '" data-idx="' + idx + '" title="删除状态">×</button>'
+          + '<button class="icon" data-act="move-state" data-scope="' + scopePath + '" data-idx="' + idx + '" data-dir="-1" title="上移">↑</button>'
+          + '<button class="icon" data-act="move-state" data-scope="' + scopePath + '" data-idx="' + idx + '" data-dir="1" title="下移">↓</button>';
+      return '<article class="state' + (locked ? " locked" : "") + '" id="state-' + s.id + '">'
+        + '<div class="state-bar ' + s.kind + '"></div>'
+        + '<header class="state-head">'
+          + nameField
+          + '<div class="state-ops">' + ops + '</div>'
+          + seg
+        + '</header>'
+        + '<div class="state-body">' + body + '</div>'
+        + '</article>';
+    }
+
+    function renderRules(s, p, siblings, depth, parentNames){
+      var local = siblings.map(function(x){ return String(x.name||"").trim(); });
+      var toParent = s.kind === "end" && depth > 0 && parentNames && parentNames.length;
+      var names = toParent ? parentNames : local;
+      var rows = s.rules.map(function(r, ri){ return renderRule(r, p + ".rules." + ri, ri, names, toParent); }).join("");
+      return '<div class="rules">'
+        + (rows || '<p class="empty-hint">还没有规则。一条规则 = 条件集 + 行动集 + 下一状态。</p>')
+        + '<button class="add-line" data-act="add-rule" data-scope="' + p + '.rules">＋ 添加规则</button>'
+        + '</div>';
+    }
+
+    function renderRule(r, rPath, idx, names, toParent){
+      var next = String(r.next||"").trim();
+      var ok = next && names.indexOf(next) >= 0;
+      var nextOpts = '<option value="">— 未选择 —</option>' + names.map(function(n){
+        return '<option value="' + esc(n) + '"' + (n === next ? " selected" : "") + '>' + esc(n) + '</option>';
+      }).join("");
+      var conds = r.conditions.map(function(c, ci){
+        return renderLine(c, rPath + ".conditions." + ci, CONDITION_TYPES, "cond", rPath + ".conditions");
+      }).join("");
+      var acts = r.actions.map(function(a, ai){
+        return renderLine(a, rPath + ".actions." + ai, ACTION_TYPES, "act", rPath + ".actions");
+      }).join("");
+      return '<div class="rule">'
+        + '<div class="rule-head"><span class="rule-tag">规则 ' + pad(idx) + '</span>'
+          + '<button class="switch-chip' + (r.switch ? " on" : "") + '" data-act="toggle-switch" data-path="' + rPath + '.switch" title="命中后切换到下一个账号">切号</button>'
+          + '<button class="mini" data-act="dup-rule" data-scope="' + rPath.replace(/\.rules\.\d+$/,"") + '.rules" data-idx="' + idx + '">复制</button>'
+          + '<button class="mini danger" data-act="del-rule" data-scope="' + rPath.replace(/\.rules\.\d+$/,"") + '.rules" data-idx="' + idx + '">删除</button>'
+        + '</div>'
+        + '<div class="rule-grid">'
+          + '<div class="sect"><div class="sect-head"><span class="sect-label">条件</span>'
+            + '<span class="sect-hint cond">' + (r.conditions.length ? "满足全部 · " + r.conditions.length : "无条件 · 默认") + '</span>'
+            + (r.conditions.length ? '<button class="mini-clear" data-act="clear-cond" data-scope="' + rPath + '.conditions" title="清空条件，变为无条件">清空</button>' : '')
+          + '</div>'
+            + '<div class="rows">' + (conds || '<p class="empty-hint">无条件 · 条件恒成立</p>') + '</div>'
+            + '<button class="add-line" data-act="add-cond" data-scope="' + rPath + '.conditions">＋ 条件</button>'
+          + '</div>'
+          + '<div class="sect"><div class="sect-head"><span class="sect-label">行动</span>'
+            + '<span class="sect-hint act">' + (r.actions.length ? "顺序执行 · " + r.actions.length : "无行动 · 默认") + '</span>'
+            + (r.actions.length ? '<button class="mini-clear" data-act="clear-act" data-scope="' + rPath + '.actions" title="清空行动，变为无行动">清空</button>' : '')
+          + '</div>'
+            + '<div class="rows">' + (acts || '<p class="empty-hint">无行动 · 命中后不执行任何操作</p>') + '</div>'
+            + '<button class="add-line" data-act="add-action" data-scope="' + rPath + '.actions">＋ 行动</button>'
+          + '</div>'
+        + '</div>'
+        + '<div class="next-row"><span class="next-label">下一状态</span>'
+          + (toParent ? '<span class="next-scope">父层</span>' : '')
+          + '<span class="next-arrow">→</span>'
+          + '<select class="next-sel ' + (ok ? "" : "bad") + '" data-path="' + rPath + '.next" data-rerender="1" aria-label="下一状态">' + nextOpts + '</select>'
+          + (ok ? '' : '<span class="next-warn">' + (next ? (toParent ? "不在父层" : "状态不存在") : "未设置") + '</span>')
+        + '</div>'
+        + '</div>';
+    }
+
+    function renderLine(item, path, registry, kind, scopePath){
+      var schema = registry[item.type];
+      if(!schema){ item.type = Object.keys(registry)[0]; schema = registry[item.type]; }
+      var typeOpts = "";
+      var curGroup = null, openGroup = false;
+      Object.keys(registry).forEach(function(k){
+        var g = registry[k].group || "";
+        if(g !== curGroup){
+          if(openGroup) typeOpts += '</optgroup>';
+          if(g){ typeOpts += '<optgroup label="' + esc(g) + '">'; openGroup = true; }
+          else openGroup = false;
+          curGroup = g;
+        }
+        typeOpts += '<option value="' + k + '"' + (item.type === k ? " selected" : "") + '>' + registry[k].label + '</option>';
+      });
+      if(openGroup) typeOpts += '</optgroup>';
+      var params = schema.params.map(function(pr){
+        return paramField(pr, path + ".params." + pr.key, item.params[pr.key]);
+      }).join("");
+      var idx = path.split(".").pop();
+      return '<div class="line">'
+        + '<select class="type" data-path="' + path + '.type" data-rerender="1" aria-label="' + (kind === "cond" ? "条件类型" : "行动类型") + '">' + typeOpts + '</select>'
+        + '<div class="params">' + params + '</div>'
+        + '<button class="rm" data-act="del-' + kind + '" data-scope="' + scopePath + '" data-idx="' + idx + '" title="删除">×</button>'
+        + '</div>';
+    }
+
+    function paramField(pr, path, value){
+      var v = (value === undefined || value === null) ? "" : value;
+      var ph = pr.ph ? ' placeholder="' + esc(pr.ph) + '"' : "";
+      if(pr.ui === "bool"){
+        return '<label class="param bool"><input type="checkbox"' + (v === true || v === "true" ? " checked" : "")
+          + ' data-path="' + path + '"><span>' + esc(pr.label) + '</span></label>';
+      }
+      if(pr.ui === "region" || pr.ui === "colors" || pr.ui === "point"){
+        return '<label class="param txt mono"><span>' + esc(pr.label) + '</span>'
+          + '<input type="text" value="' + esc(v) + '"' + ph + ' data-path="' + path + '" spellcheck="false"></label>';
+      }
+      if(pr.ui === "select"){
+        return '<label class="param sel"><span>' + esc(pr.label) + '</span><select data-path="' + path + '">'
+          + pr.options.map(function(o){ return '<option' + (o === v ? " selected" : "") + '>' + esc(o) + '</option>'; }).join("")
+          + '</select></label>';
+      }
+      if(pr.ui === "num"){
+        return '<label class="param num"><span>' + esc(pr.label) + '</span>'
+          + '<input type="number" step="' + (pr.step || 1) + '" value="' + esc(v) + '"' + ph + ' data-path="' + path + '"></label>';
+      }
+      return '<label class="param txt"><span>' + esc(pr.label) + '</span>'
+        + '<input type="text" value="' + esc(v) + '"' + ph + ' data-path="' + path + '" spellcheck="false"></label>';
+    }
+
+    function renderSubtask(s, p, depth, siblings){
+      if(!s.subtask) s.subtask = { states:[] };
+      var sp = p + ".subtask.states";
+      var parentNames = (siblings || []).map(function(x){ return String(x.name||"").trim(); });
+      return '<div class="subtask">'
+        + '<div class="subtask-head"><span class="sub-mark">子任务</span>'
+          + '<span class="sub-hint">' + s.subtask.states.length + ' 个状态</span>'
+        + '</div>'
+        + '<div class="sub-body">'
+          + renderStates(s.subtask.states, sp, depth + 1, parentNames)
+          + '<div class="addbar sm"><span class="lbl">开始 / 结束自动创建</span>'
+            + '<button data-act="add-state" data-scope="' + sp + '"><span class="dot custom"></span>＋ 新增状态</button>'
+          + '</div>'
+        + '</div></div>';
+    }
+
+    /* 引用子任务：只存路径 + 返回状态，内容由运行时按「任务/」目录加载，校验交脚本 */
+    function renderInclude(s, p, siblings){
+      var names = siblings.map(function(x){ return String(x.name || "").trim(); }).filter(function(x){ return x; });
+      var next = String(s.next || "").trim();
+      var opts = '<option value="">— 未选择 —</option>' + names.map(function(n){
+        return '<option value="' + esc(n) + '"' + (n === next ? " selected" : "") + '>' + esc(n) + '</option>';
+      }).join("");
+      return '<div class="inc-body">'
+        + '<label class="param txt"><span>路径</span>'
+          + '<input type="text" value="' + esc(s.path || "") + '" data-path="' + p + '.path" '
+          + 'placeholder="战斗/秘境寻踪-三层-三首领（相对 任务/ 目录，不写后缀）" spellcheck="false"></label>'
+        + '<label class="param sel"><span>返回状态</span><select data-path="' + p + '.next">' + opts + '</select></label>'
+        + '<p class="empty-hint">这个状态不带规则：运行时到 任务/ 下读这个路径（自动补 .json，路径不用写后缀）当子任务，'
+          + '跑完文件里顶层「结束」后回到上面选的同层状态。文件由本编辑器的「下载」生成，内容就是状态数组。</p>'
+        + '</div>';
+    }
+
+    function renderEditor(){
+      var ed = document.getElementById("editor");
+      var nameEl = document.getElementById("taskName");
+      var t = task();
+      if(!t){
+        nameEl.value = ""; nameEl.disabled = true; nameEl.removeAttribute("data-path");
+        ed.innerHTML = '<div class="empty-state"><p>还没有任务。一个任务由「任务名 + 状态列表」组成。</p>'
+          + '<button class="btn primary" data-act="new-task">新建任务</button>'
+          + '<div class="hint">状态 → 规则集（条件 / 行动 / 下一状态）、子任务，或引用另一个 json</div></div>';
+        return;
+      }
+      var i = activeTaskIndex();
+      nameEl.disabled = false;
+      nameEl.value = t.name || "";
+      nameEl.dataset.path = "tasks." + i + ".name";
+      var stat = countStates(t.states);
+      if(stat.states > MAX_EDIT_STATES){
+        ed.innerHTML = '<div class="empty-state"><p>该任务有 ' + stat.states + ' 个状态、' + stat.rules + ' 条规则，'
+          + '超出可视化编辑上限（' + MAX_EDIT_STATES + ' 个状态）。</p>'
+          + '<div class="hint">这类任务通常是脚本批量生成的，建议改用 tasks_to_json.py / Python 侧修改；'
+          + '仍可用右侧「下载」导出该任务，或换成更小的任务查看。</div></div>';
+        return;
+      }
+      ed.innerHTML = renderStates(t.states, "tasks." + i + ".states", 0);
+    }
+
+    /* 预览上限：超大任务的 JSON 高亮会卡住页面，超过就直接提示去下载 */
+    var MAX_PREVIEW = 200000;
+    /* 任务 JSON 文本：小任务带缩进方便看，超大任务走紧凑格式省时间省体积 */
+    function taskText(t){
+      var big = !!t && countStates(t.states).states > MAX_EDIT_STATES;
+      return JSON.stringify(t ? taskStates(t) : [], null, big ? 0 : 2);
+    }
+    function renderJson(){
+      var el = document.getElementById("jsonOut");
+      var title = document.getElementById("jsonTitle");
+      var t = task();
+      if(title) title.textContent = t ? "JSON 预览 · " + fileName(t.name) + ".json" : "JSON 预览";
+      el.innerHTML = "";
+      if(!t){ el.innerHTML = highlight("[]"); return; }
+      var stat = countStates(t.states);
+      if(stat.states > MAX_EDIT_STATES){
+        el.textContent = "该任务有 " + stat.states + " 个状态、" + stat.rules + " 条规则，已省略预览。"
+          + "用右侧「下载」导出该任务，或切换到更小的任务查看。";
+        return;
+      }
+      var text = taskText(t);
+      if(text.length > MAX_PREVIEW){
+        el.textContent = "内容较大（" + (text.length / 1048576).toFixed(1) + " MB），已省略预览。"
+          + "用右侧「下载」导出该任务，或切换到更小的任务查看。";
+        return;
+      }
+      el.innerHTML = highlight(text);
+    }
+    function highlight(json){
+      var safe = json.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      return safe.replace(/("(?:\\.|[^"\\])*")(\s*:)?|\b(-?\d+(?:\.\d+)?)\b|\b(true|false|null)\b/g,
+        function(m, str, colon, num, kw){
+          if(str) return colon ? '<span class="j-key">' + str + '</span>' + colon : '<span class="j-str">' + str + '</span>';
+          if(num) return '<span class="j-num">' + num + '</span>';
+          if(kw) return '<span class="j-kw">' + kw + '</span>';
+          return m;
+        });
+    }
+
+    /* ========== 序列化 ========== */
+    function taskStates(t){
+      return t.states.map(function(s){ return serializeState(s, 0); });
+    }
+    function serializeState(s, depth){
+      if(s.mode === "include"){
+        return {
+          name: s.name || "",
+          type: "include",
+          path: String(s.path || "").trim(),
+          next: String(s.next || "").trim() || null
+        };
+      }
+      var o = { name: s.name || "", type: s.kind };
+      if(s.mode === "subtasks"){
+        var sub = s.subtask || { states:[] };
+        o.subtask = { states: sub.states.map(function(x){ return serializeState(x, (depth||0) + 1); }) };
+      } else {
+        // 顶层「结束」是终点，规则不执行，导出时统一为空
+        o.rules = (depth||0) === 0 && s.kind === "end" ? [] : s.rules.map(function(r){
+          return {
+            conditions: r.conditions.map(function(c){ return serializeNode(c, CONDITION_TYPES); }),
+            actions: r.actions.map(function(a){ return serializeNode(a, ACTION_TYPES); }),
+            next: String(r.next||"").trim() || null,
+            switch: !!r.switch
+          };
+        });
+      }
+      return o;
+    }
+    function serializeNode(item, registry){
+      var schema = registry[item.type] || registry[Object.keys(registry)[0]];
+      var body = {};
+      schema.params.forEach(function(pr){
+        var v = item.params[pr.key];
+        if(pr.ui === "bool"){ body[pr.key] = !!v; return; }
+        if(pr.ui === "region"){ body[pr.key] = parseRegion(v); return; }
+        if(pr.ui === "colors"){ body[pr.key] = parseColors(v); return; }
+        if(pr.ui === "point"){ body[pr.key] = parsePoint(v); return; }
+        if(v === "" || v === undefined || v === null){ body[pr.key] = null; return; }
+        body[pr.key] = pr.ui === "num" ? Number(v) : v;
+      });
+      var type = schema.cls || item.type;
+      var o = { type: type };
+      if(schema.wrap){ o[schema.wrap] = body; return o; }
+      Object.keys(body).forEach(function(k){ o[k] = body[k]; });
+      return o;
+    }
+
+    /* ========== 软刷新（不重建编辑器，保留输入焦点） ========== */
+    function softRefresh(){
+      renderTabs(); renderOutline(); renderChecks(); renderStats(); renderJson();
+    }
+    function render(){
+      normalizeAll();
+      renderTabs(); renderOutline(); renderEditor(); renderChecks(); renderStats(); renderJson();
+    }
+
+    /* ========== 交互 ========== */
+    document.addEventListener("input", function(ev){
+      var el = ev.target;
+      if(!el || !el.dataset || !el.dataset.path) return;
+      var path = el.dataset.path;
+      var v = el.type === "checkbox" ? el.checked : el.value;
+      if(el.type === "number"){
+        v = el.value === "" ? "" : Number(el.value);
+        if(v !== "" && !isFinite(v)) return;
+      }
+      /* 状态名保留字与锁定状态的校验 */
+      if(/\.states\.\d+\.name$/.test(path)){
+        var hostState = getAt(path.replace(/\.name$/, ""));
+        if(hostState && hostState.kind !== "custom"){
+          el.value = hostState.name;
+          return;
+        }
+        var rawName = String(v || "").trim();
+        if(rawName === "开始" || rawName === "结束"){
+          el.value = String(getAt(path) || "");
+          toast("「" + rawName + "」是保留状态名");
+          return;
+        }
+      }
+      /* 状态改名时，同步同组规则里的 next 引用 */
+      if(/\.states\.\d+\.name$/.test(path)){
+        var oldName = String(getAt(path) || "").trim();
+        var newName = String(v || "").trim();
+        var siblings = getAt(path.replace(/\.\d+\.name$/, ""));
+        if(oldName && newName && oldName !== newName && Array.isArray(siblings)){
+          siblings.forEach(function(st){
+            if(st.mode !== "rules") return;
+            st.rules.forEach(function(r){
+              if(String(r.next || "").trim() === oldName) r.next = newName;
+            });
+          });
+        }
+      }
+      setAt(path, v);
+      softRefresh();
+    });
+
+    document.addEventListener("change", function(ev){
+      var el = ev.target;
+      if(!el || !el.dataset || !el.dataset.path) return;
+      if(el.tagName === "INPUT") return;
+      var cPath = el.dataset.path;
+      /* 切换条件/行动类型时，参数重置为新类型的默认值 */
+      if(/\.(conditions|actions)\.\d+\.type$/.test(cPath)){
+        var reg = cPath.indexOf(".actions.") >= 0 ? ACTION_TYPES : CONDITION_TYPES;
+        var schema = reg[el.value];
+        if(schema) setAt(cPath.replace(/\.type$/, "") + ".params", blankParams(schema));
+      }
+      setAt(cPath, el.value);
+      if(el.dataset.rerender) render(); else softRefresh();
+    });
+
+    document.addEventListener("keydown", function(ev){
+      if(ev.key !== "Enter" && ev.key !== " ") return;
+      var tab = ev.target.closest && ev.target.closest('.tab');
+      if(tab && ev.target === tab){ ev.preventDefault(); selectTask(tab.dataset.id); }
+    });
+
+    document.addEventListener("click", function(ev){
+      var el = ev.target.closest("[data-act]");
+      if(!el) return;
+      var act = el.dataset.act;
+      var scope, arr, idx, sub, r;
+
+      switch(act){
+        case "select-task": selectTask(el.dataset.id); break;
+        case "del-task": removeTask(el.dataset.id); break;
+        case "new-task": addTask(); break;
+        case "goto": scrollToState(el.dataset.id); break;
+        case "set-mode":
+          setAt(el.dataset.path, el.dataset.val);
+          if(el.dataset.val === "subtasks"){
+            var host = getAt(el.dataset.path.replace(/\.mode$/, ""));
+            if(host){
+              if(!host.subtask) host.subtask = { states:[] };
+              if(!host.subtask.states.length) primeStatePair(host.subtask.states);
+            }
+          }
+          if(el.dataset.val === "include"){
+            var inc = getAt(el.dataset.path.replace(/\.mode$/, ""));
+            if(inc){
+              if(inc.path == null) inc.path = "";
+              if(inc.next == null) inc.next = "";
+            }
+          }
+          render(); break;
+        case "add-state":
+          scope = el.dataset.scope || (taskPath() + ".states");
+          arr = getAt(scope);
+          if(!arr) return;
+          sub = newState("custom", arr);
+          arr.push(sub);
+          render();
+          scrollToState(sub.id); break;
+        case "del-state":
+          arr = getAt(el.dataset.scope); if(!arr) return;
+          idx = Number(el.dataset.idx);
+          if(arr[idx] && arr[idx].kind !== "custom"){ toast("开始和结束状态不可删除"); return; }
+          if(!confirm("删除这个状态？其中的规则与子任务会一并移除。")) return;
+          arr.splice(idx, 1);
+          render(); break;
+        case "move-state":
+          arr = getAt(el.dataset.scope); if(!arr) return;
+          idx = Number(el.dataset.idx);
+          var to = idx + Number(el.dataset.dir);
+          if(to < 0 || to >= arr.length) return;
+          if(arr[idx].kind !== "custom" || arr[to].kind !== "custom") return;
+          r = arr[idx]; arr[idx] = arr[to]; arr[to] = r;
+          render();
+          if(r && r.id) flash(r.id); break;
+        case "add-rule":
+          arr = getAt(el.dataset.scope); if(!arr) return;
+          arr.push(newRule("custom"));
+          render(); break;
+        case "del-rule":
+          arr = getAt(el.dataset.scope); if(!arr) return;
+          arr.splice(Number(el.dataset.idx), 1); render(); break;
+        case "dup-rule":
+          arr = getAt(el.dataset.scope); if(!arr) return;
+          idx = Number(el.dataset.idx);
+          var copy = cloneRule(arr[idx]);
+          arr.splice(idx + 1, 0, copy);
+          render(); break;
+        case "add-cond":
+          arr = getAt(el.dataset.scope); if(!arr) return;
+          var firstCond = Object.keys(CONDITION_TYPES)[0];
+          arr.push({ type:firstCond, params:blankParams(CONDITION_TYPES[firstCond]) });
+          render(); break;
+        case "add-action":
+          arr = getAt(el.dataset.scope); if(!arr) return;
+          var firstAct = Object.keys(ACTION_TYPES)[0];
+          arr.push({ type:firstAct, params:blankParams(ACTION_TYPES[firstAct]) });
+          render(); break;
+        case "toggle-switch":
+          setAt(el.dataset.path, !getAt(el.dataset.path));
+          render(); break;
+        case "del-cond":
+        case "del-act":
+          arr = getAt(el.dataset.scope); if(!arr) return;
+          arr.splice(Number(el.dataset.idx), 1); render(); break;
+        case "clear-cond":
+        case "clear-act":
+          arr = getAt(el.dataset.scope); if(!arr) return;
+          arr.length = 0; render(); break;
+      }
+    });
+
+    function cloneRule(r){
+      return {
+        id:nid("r"),
+        conditions: r.conditions.map(function(c){
+          var o = { type:c.type, params:{} };
+          Object.keys(c.params || {}).forEach(function(k){ o.params[k] = c.params[k]; });
+          return o;
+        }),
+        actions: r.actions.map(function(a){
+          var o = { type:a.type, params:{} };
+          Object.keys(a.params || {}).forEach(function(k){ o.params[k] = a.params[k]; });
+          return o;
+        }),
+        next: r.next || "",
+        switch: !!r.switch
+      };
+    }
+
+    function selectTask(id){
+      if(!id || id === APP.activeTask) return;
+      APP.activeTask = id;
+      render();
+      window.scrollTo({ top:0, behavior:"smooth" });
+    }
+    function primeStatePair(list){
+      var begin = newState("begin", list, "开始");
+      var end = newState("end", list, "结束");
+      list.push(begin, end);
+      return { begin:begin, end:end };
+    }
+
+    /* 结构约束：每个状态列表 = 开始 + 自定义… + 结束 */
+    function normalizeList(list){
+      if(!list || !list.length) return list;
+      var begin = null, end = null, mids = [];
+      list.forEach(function(s){
+        if(s.kind === "begin"){
+          if(!begin){ begin = s; } else { s.kind = "custom"; mids.push(s); }
+        } else if(s.kind === "end"){
+          if(!end){ end = s; } else { s.kind = "custom"; mids.push(s); }
+        } else mids.push(s);
+      });
+      if(!begin) begin = newState("begin", list, "开始");
+      if(!end) end = newState("end", list, "结束");
+      begin.name = "开始";
+      end.name = "结束";
+      mids.forEach(function(m){
+        var n = String(m.name || "").trim();
+        if(!n || n === "开始" || n === "结束") m.name = uniqueName(list, "状态");
+        m.kind = "custom";
+      });
+      list.length = 0;
+      list.push(begin);
+      mids.forEach(function(m){ list.push(m); });
+      list.push(end);
+      list.forEach(function(s){
+        if(s.mode === "subtasks" && s.subtask) normalizeList(s.subtask.states);
+      });
+      return list;
+    }
+    function normalizeAll(){
+      APP.tasks.forEach(function(t){ normalizeList(t.states); });
+    }
+    function addTask(){
+      var t = { id:nid("task"), name:"新任务 " + (APP.tasks.length + 1), states:[] };
+      APP.tasks.push(t);
+      APP.activeTask = t.id;
+      primeStatePair(t.states);
+      render();
+      toast("已新建任务，并添加「开始 / 结束」两个状态");
+    }
+    function removeTask(id){
+      var i = -1;
+      for(var k=0;k<APP.tasks.length;k++){ if(APP.tasks[k].id === id) i = k; }
+      if(i < 0) return;
+      if(!confirm("删除任务「" + (APP.tasks[i].name || "未命名") + "」？")) return;
+      APP.tasks.splice(i, 1);
+      if(APP.activeTask === id){
+        APP.activeTask = APP.tasks.length ? APP.tasks[Math.min(i, APP.tasks.length - 1)].id : null;
+      }
+      render();
+    }
+
+    function scrollToState(id){
+      if(!id) return;
+      var el = document.getElementById("state-" + id);
+      if(!el) return;
+      el.scrollIntoView({ block:"center", behavior:"smooth" });
+      flash(id);
+    }
+    function flash(id){
+      var el = document.getElementById("state-" + id);
+      if(!el) return;
+      el.style.transition = "box-shadow .25s";
+      el.style.boxShadow = "0 0 0 1px #E0A242";
+      setTimeout(function(){ el.style.boxShadow = ""; }, 900);
+    }
+
+    var toastTimer = null;
+    function toast(msg){
+      var el = document.getElementById("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function(){ el.classList.remove("show"); }, 2000);
+    }
+
+    /* ========== 导入 / 导出 ========== */
+    /* 文件名即任务名：去掉 .json，替换掉 Windows 不允许的字符 */
+    function fileName(name){
+      var raw = String(name || "").replace(/\.json$/i, "").replace(/[\\/:*?"<>|]/g, "_").trim();
+      return raw || "未命名任务";
+    }
+    /* 一个状态：有 name，且带 type/kind/rules/subtask 之一 */
+    function isStateLike(o){
+      return !!o && typeof o === "object" && typeof o.name === "string"
+        && (typeof o.type === "string" || typeof o.kind === "string" || Array.isArray(o.rules) || !!o.subtask);
+    }
+    /* 单个文件 → 一个或多个任务；文件名作为任务名 */
+    function tasksFromFile(name, data){
+      var fallbackName = fileName(name);
+      if(Array.isArray(data)){
+        if(data.length && data.every(isStateLike)){
+          return [{ id:nid("task"), name:fallbackName, states:data.map(function(s){ return adoptState(s, 0); }) }];
+        }
+        return adopt(data);
+      }
+      if(data && typeof data === "object"){
+        if(Array.isArray(data.tasks)) return adopt(data);
+        if(Array.isArray(data.states)){
+          return [{ id:nid("task"), name:data.name || fallbackName,
+                    states:data.states.map(function(s){ return adoptState(s, 0); }) }];
+        }
+        if(isStateLike(data)) return [{ id:nid("task"), name:fallbackName, states:[adoptState(data, 0)] }];
+      }
+      return [];
+    }
+    /* 同名任务覆盖，其余追加 */
+    function mergeTasks(list){
+      var added = 0, replaced = 0;
+      list.forEach(function(t){
+        var idx = -1;
+        for(var i=0;i<APP.tasks.length;i++){ if(APP.tasks[i].name === t.name){ idx = i; break; } }
+        if(idx >= 0){ t.id = APP.tasks[idx].id; APP.tasks[idx] = t; replaced++; }
+        else { APP.tasks.push(t); added++; }
+      });
+      return { added:added, replaced:replaced };
+    }
+    function adopt(obj){
+      var raw = Array.isArray(obj) ? obj : (obj && obj.tasks ? obj.tasks : (obj ? [obj] : []));
+      return raw.map(function(t){
+        return {
+          id:nid("task"),
+          name: t.name || "未命名任务",
+          states: (t.states || []).map(function(s){ return adoptState(s, 0); })
+        };
+      });
+    }
+    function adoptState(s, depth){
+      var kind = (s.type || s.kind || "custom");
+      if(kind === "include"){
+        return { id:nid("st"), name:s.name || "状态", kind:"custom", mode:"include",
+                 path:s.path || "", next:s.next || "", rules:[], subtask:{ states:[] } };
+      }
+      if(["begin","custom","end"].indexOf(kind) < 0) kind = "custom";
+      var st = { id:nid("st"), name:s.name || "状态", kind:kind, mode:"rules", rules:[],
+                 subtask:{ states:[] }, path:"", next:"" };
+      var subSrc = s.subtask || (Array.isArray(s.subtasks) ? s.subtasks[0] : null);
+      var subStates = (subSrc && Array.isArray(subSrc.states)) ? subSrc.states : null;
+      if(subStates && !s.rules){
+        st.mode = "subtasks";
+        st.subtask = { states: subStates.map(function(x){ return adoptState(x, (depth||0) + 1); }) };
+      } else if((depth||0) === 0 && kind === "end"){
+        st.rules = [];
+      } else {
+        st.rules = (s.rules || []).map(function(r){
+          return {
+            id:nid("r"),
+            conditions: (r.conditions || []).map(function(c){ return adoptNode(c, CONDITION_TYPES); }),
+            actions: (r.actions || []).map(function(a){ return adoptNode(a, ACTION_TYPES); }),
+            next: r.next || "",
+            switch: !!r.switch
+          };
+        });
+      }
+      return st;
+    }
+    function adoptNode(item, registry){
+      item = item || {};
+      var rawType = item.type;
+      var src = item;
+      var LEGACY = registry === CONDITION_TYPES ? { findImage:"FindImage", findText:"FindText", equals:"Equal", lessThan:"Less" } : {};
+      if(LEGACY[rawType]) rawType = LEGACY[rawType];
+      var probe = registry[rawType];
+      if(probe && probe.wrap && item[probe.wrap] && typeof item[probe.wrap] === "object") src = item[probe.wrap];
+      /* 旧版条件字段名兼容：target / keyword / variable */
+      if(registry === CONDITION_TYPES){
+        if(item.target !== undefined && src.name === undefined) src = { name:item.target, threshold:item.threshold, region:item.region };
+        if(item.keyword !== undefined && src.name === undefined) src = { name:item.keyword, region:item.region };
+        if(item.variable !== undefined && src.key === undefined) src = { key:item.variable, value:item.value };
+      }
+      var type = registry[rawType] ? rawType : Object.keys(registry)[0];
+      var schema = registry[type];
+      var params = {};
+      schema.params.forEach(function(pr){
+        var v = src[pr.key];
+        if(v === undefined || v === null){ params[pr.key] = pr.def; return; }
+        if(pr.ui === "region") params[pr.key] = formatRegion(v);
+        else if(pr.ui === "colors") params[pr.key] = formatColors(v);
+        else if(pr.ui === "point") params[pr.key] = formatPoint(v);
+        else params[pr.key] = v;
+      });
+      return { type:type, params:params };
+    }
+
+    document.getElementById("btnNewTask").addEventListener("click", addTask);
+    document.getElementById("btnExport").addEventListener("click", downloadAll);
+    document.getElementById("btnDownload").addEventListener("click", function(){
+      var t = task();
+      if(!t){ toast("还没有任务可下载"); return; }
+      downloadTask(t);
+    });
+    document.getElementById("btnCopy").addEventListener("click", function(){
+      copyText(taskText(task()));
+    });
+    document.getElementById("btnImport").addEventListener("click", function(){
+      document.getElementById("fileInput").click();
+    });
+    document.getElementById("fileInput").addEventListener("change", function(ev){
+      var files = ev.target.files ? Array.prototype.slice.call(ev.target.files) : [];
+      ev.target.value = "";
+      if(!files.length) return;
+      var pending = files.length;
+      var results = [];
+      var failed = [];
+      files.forEach(function(file, index){
+        var isZip = /\.zip$/i.test(file.name);
+        var reader = new FileReader();
+        reader.onload = function(){
+          try {
+            results[index] = isZip ? tasksFromZip(reader.result) : tasksFromJson(file.name, reader.result);
+            var got = results[index] || [];
+            if(!got.length){ failed.push(file.name + "（没有可导入的任务）"); }
+          } catch(e){
+            failed.push(file.name + "（" + e.message + "）");
+          }
+          if(--pending === 0) finishImport();
+        };
+        if(isZip) reader.readAsArrayBuffer(file);
+        else reader.readAsText(file);
+      });
+      function tasksFromJson(name, text){
+        return tasksFromFile(name, JSON.parse(String(text)));
+      }
+      function tasksFromZip(buffer){
+        var zip = readZip(buffer);
+        if(zip.error) throw new Error(zip.error);
+        var list = [];
+        zip.entries.forEach(function(entry){
+          try { list = list.concat(tasksFromFile(entry.name, JSON.parse(entry.text))); }
+          catch(e){ failed.push(entry.name + "（" + e.message + "）"); }
+        });
+        return list;
+      }
+      function finishImport(){
+        var list = [];
+        results.forEach(function(group){ if(group) list = list.concat(group); });
+        if(!list.length){ toast("导入失败：" + (failed[0] || "文件里没有可导入的任务")); return; }
+        var stat = mergeTasks(list);
+        APP.activeTask = list[list.length - 1].id;
+        render();
+        var msg = "已导入 " + list.length + " 个任务";
+        if(stat.replaced) msg += "（覆盖同名 " + stat.replaced + "）";
+        if(failed.length) msg += "，失败 " + failed.length + " 个";
+        toast(msg);
+        if(failed.length) console.warn("导入失败：", failed);
+      }
+    });
+
+    function saveBlob(text, name){
+      saveBytes(new Blob([text], { type:"application/json;charset=utf-8" }), name);
+    }
+    function saveBytes(blob, name){
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    }
+    /* 单个任务：文件名「任务名.json」，内容就是该任务的 states */
+    function downloadTask(t){
+      saveBlob(taskText(t), fileName(t.name) + ".json");
+    }
+    /* 全部任务：一个任务一个 json；多个任务打包成一个 zip（浏览器不允许一次静默下多个文件） */
+    function downloadAll(){
+      if(!APP.tasks.length){ toast("还没有任务可导出"); return; }
+      if(APP.tasks.length === 1){
+        downloadTask(APP.tasks[0]);
+        toast("已导出 " + fileName(APP.tasks[0].name) + ".json");
+        return;
+      }
+      var enc = new TextEncoder();
+      var entries = APP.tasks.map(function(t){
+        return { name: fileName(t.name) + ".json", bytes: enc.encode(JSON.stringify(taskStates(t), null, 2)) };
+      });
+      saveBytes(new Blob([makeZip(entries)], { type:"application/zip" }), "任务脚本-" + APP.tasks.length + "个任务.zip");
+      toast("已导出 " + APP.tasks.length + " 个任务（解压后每个任务一个 json）");
+    }
+
+    /* ========== 最小 zip 读写（store 模式，无压缩；只服务本页导出/导入） ========== */
+    var CRC_TABLE = (function(){
+      var table = new Uint32Array(256);
+      for(var n = 0; n < 256; n++){
+        var c = n;
+        for(var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        table[n] = c >>> 0;
+      }
+      return table;
+    })();
+    function crc32(bytes){
+      var crc = 0xFFFFFFFF;
+      for(var i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ bytes[i]) & 0xFF];
+      return (crc ^ 0xFFFFFFFF) >>> 0;
+    }
+    function makeZip(entries){
+      var enc = new TextEncoder();
+      var parts = [];
+      var central = [];
+      var offset = 0;
+      entries.forEach(function(entry){
+        var nameBytes = enc.encode(entry.name);
+        var data = entry.bytes;
+        var crc = crc32(data);
+        var local = new Uint8Array(30 + nameBytes.length);
+        var lv = new DataView(local.buffer);
+        lv.setUint32(0, 0x04034b50, true);
+        lv.setUint16(4, 20, true);
+        lv.setUint16(6, 0x0800, true);
+        lv.setUint32(14, crc, true);
+        lv.setUint32(18, data.length, true);
+        lv.setUint32(22, data.length, true);
+        lv.setUint16(26, nameBytes.length, true);
+        local.set(nameBytes, 30);
+        parts.push(local, data);
+        var cd = new Uint8Array(46 + nameBytes.length);
+        var cv = new DataView(cd.buffer);
+        cv.setUint32(0, 0x02014b50, true);
+        cv.setUint16(4, 20, true);
+        cv.setUint16(6, 20, true);
+        cv.setUint16(8, 0x0800, true);
+        cv.setUint32(16, crc, true);
+        cv.setUint32(20, data.length, true);
+        cv.setUint32(24, data.length, true);
+        cv.setUint16(28, nameBytes.length, true);
+        cv.setUint32(42, offset, true);
+        cd.set(nameBytes, 46);
+        central.push(cd);
+        offset += local.length + data.length;
+      });
+      var cdSize = central.reduce(function(sum, cd){ return sum + cd.length; }, 0);
+      var eocd = new Uint8Array(22);
+      var ev = new DataView(eocd.buffer);
+      ev.setUint32(0, 0x06054b50, true);
+      ev.setUint16(8, entries.length, true);
+      ev.setUint16(10, entries.length, true);
+      ev.setUint32(12, cdSize, true);
+      ev.setUint32(16, offset, true);
+      var total = offset + cdSize + 22;
+      var out = new Uint8Array(total);
+      var pos = 0;
+      parts.concat(central, [eocd]).forEach(function(part){ out.set(part, pos); pos += part.length; });
+      return out;
+    }
+    /* 只认 store（无压缩）的 zip；解不开就返回 error */
+    function readZip(buffer){
+      var bytes = new Uint8Array(buffer);
+      var view = new DataView(buffer);
+      var eocd = -1;
+      for(var i = bytes.length - 22; i >= 0 && i >= bytes.length - 22 - 65535; i--){
+        if(view.getUint32(i, true) === 0x06054b50){ eocd = i; break; }
+      }
+      if(eocd < 0) return { error:"不是有效的 zip" };
+      var count = view.getUint16(eocd + 10, true);
+      var pointer = view.getUint32(eocd + 16, true);
+      var decoder = new TextDecoder("utf-8");
+      var entries = [];
+      for(var n = 0; n < count; n++){
+        if(view.getUint32(pointer, true) !== 0x02014b50) return { error:"zip 目录损坏" };
+        var method = view.getUint16(pointer + 10, true);
+        var size = view.getUint32(pointer + 20, true);
+        var nameLen = view.getUint16(pointer + 28, true);
+        var extraLen = view.getUint16(pointer + 30, true);
+        var commentLen = view.getUint16(pointer + 32, true);
+        var localOffset = view.getUint32(pointer + 42, true);
+        var name = decoder.decode(bytes.subarray(pointer + 46, pointer + 46 + nameLen));
+        if(method !== 0) return { error:"zip 内的 " + name + " 是压缩过的，请用 store 模式打包" };
+        var localNameLen = view.getUint16(localOffset + 26, true);
+        var localExtraLen = view.getUint16(localOffset + 28, true);
+        var start = localOffset + 30 + localNameLen + localExtraLen;
+        if(/\.json$/i.test(name)) entries.push({ name:name, text:decoder.decode(bytes.subarray(start, start + size)) });
+        pointer += 46 + nameLen + extraLen + commentLen;
+      }
+      return { entries:entries };
+    }
+    function copyText(text){
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(function(){ toast("JSON 已复制到剪贴板"); })
+          .catch(function(){ fallbackCopy(text); });
+      } else fallbackCopy(text);
+    }
+    function fallbackCopy(text){
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); toast("JSON 已复制"); }
+      catch(e){ toast("复制失败，请手动选择文本"); }
+      document.body.removeChild(ta);
+    }
+
+    /* ========== 启动 ========== */
+    APP.tasks = [];
+    APP.activeTask = null;
+    render();
+
+    })();
+</script>
+</body>
+</html>

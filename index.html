@@ -320,9 +320,9 @@
                     <button class="shortcut-btn" id="dragMainPointsRightBtn" disabled>右拖</button>
                     <button class="shortcut-btn" id="scrollUpBtn" disabled>上滚</button>
                     <button class="shortcut-btn" id="scrollDownBtn" disabled>下滚</button>
-                    <button class="shortcut-btn" data-broadcast="start" disabled>开始</button>
-                    <button class="shortcut-btn" data-broadcast="stop" disabled>停止</button>
-            <button class="shortcut-btn" data-broadcast="shutdown" disabled>关机</button>
+                    <button class="shortcut-btn" data-command="start" disabled>开始</button>
+                    <button class="shortcut-btn" data-command="stop" disabled>停止</button>
+                    <button class="shortcut-btn" data-command="shutdown" disabled>关机</button>
         </div>
     </div>
 
@@ -606,11 +606,11 @@
         moveMainPointsBtn.disabled = !en;
     }
 
-    // 控制"操作类"按钮（刷新画面 / 广播按钮）的启停
+    // 控制"操作类"按钮（刷新画面 / 开始停止关机）的启停
     function setActionButtonsEnabled(en){
         refreshBtn.disabled = !en;
         addMainPointBtn.disabled = !en;
-        document.querySelectorAll('.shortcut-btn[data-broadcast]').forEach((b)=> b.disabled = !en);
+        document.querySelectorAll('.shortcut-btn[data-command]').forEach((b)=> b.disabled = !en);
         scrollUpBtn.disabled = !en;
         scrollDownBtn.disabled = !en;
     }
@@ -862,17 +862,17 @@
         captureDelayed();
     });
 
-    // 广播按钮（开始/停止/关机）：调用 broadcast RPC 广播对应消息
-    document.querySelectorAll('.shortcut-btn[data-broadcast]').forEach((b)=>{
+    // 开始/停止/关机：直接调用同名 RPC（start / stop / shutdown）
+    document.querySelectorAll('.shortcut-btn[data-command]').forEach((b)=>{
         b.addEventListener('click',()=>{
-            const data = b.dataset.broadcast;
+            const method = b.dataset.command;
             if(!authed){ alert('未完成连接'); return; }
             // 关机属高风险操作，需二次确认避免误点
-            if(data === 'shutdown' && !confirm('确定要执行关机吗？')){
+            if(method === 'shutdown' && !confirm('确定要执行关机吗？')){
                 return;
             }
-            rpc('broadcast', {data: data});
-            setStatus('已广播：' + data);
+            rpc(method, {});
+            setStatus('已发送 ' + method);
         });
     });
 

@@ -688,10 +688,6 @@
             rpc('capture'); // 连接成功后抓一帧
             return;
         }
-        if(obj.type === 'broadcast'){
-            setStatus('收到广播：' + obj.data);
-            return;
-        }
         if(obj.error){
             setStatus('❌ 命令失败: ' + (obj.error.msg !== undefined ? obj.error.msg : 'code ' + obj.error.code));
             if(obj.id !== undefined && pendingRpc.has(obj.id)){
@@ -871,7 +867,7 @@
             if(method === 'shutdown' && !confirm('确定要执行关机吗？')){
                 return;
             }
-            rpc(method, {});
+            rpc(method);
             setStatus('已发送 ' + method);
         });
     });

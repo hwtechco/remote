@@ -274,7 +274,7 @@
         .empty-state p{color:var(--muted);font-size:13px;margin-bottom:12px}
         .empty-state .hint{color:var(--dim);font-size:11.5px;font-family:var(--mono);margin-top:10px}
 
-        /* JSON */
+        /* YAML 预览 */
         .json{
           flex:1;overflow:auto;padding:12px 12px 20px;margin:0;
           font-family:var(--mono);font-size:11.5px;line-height:1.7;
@@ -282,6 +282,7 @@
           color:#CBD6E1;background:var(--panel);
           -moz-tab-size:2;tab-size:2;min-height:120px;
         }
+        .j-punc{color:var(--dim)}
         .j-key{color:#8EB8CE}
         .j-str{color:#C8B27A}
         .j-num{color:#9BB7E2}
@@ -329,7 +330,7 @@
     <nav class="taskbar" id="taskTabs" aria-label="任务列表"></nav>
     <div class="top-actions">
         <button class="btn" id="btnNewTask">新建任务</button>
-        <button class="btn primary" id="btnExport">导出 JSON</button>
+        <button class="btn primary" id="btnExport">导出 YAML</button>
     </div>
 </header>
 
@@ -364,22 +365,22 @@
             <b>结构：</b>开始 → 自定义… → 结束，开始/结束自动创建、名称固定（内容照常可编辑）<br>
             <b>语义：</b>开始是入口，其规则决定流程走向；结束是终止，走到此处即停<br>
             <b>规则：</b>条件集 + 行动集 + 下一状态 + 切号标记<br>
-            <b>引用：</b>状态可选「引用」，只存路径（相对 任务/，不写 .json 后缀）与返回状态；运行时读该文件当子任务，跑完文件里的「结束」回到该返回状态<br>
+            <b>引用：</b>状态可选「引用」，只存路径（相对 任务/，不写 .yaml 后缀）与返回状态；运行时读该文件当子任务，跑完文件里的「结束」回到该返回状态<br>
             <b>默认空值：</b>无条件 = 条件为空（恒成立）· 无行动 = 行动为空（不执行操作）<br>
             <b>类型注册表：</b>条件对齐 server/condition 的 7 个类 · 行动对齐 server/action 的 27 个类，可继续扩展<br>
-            <b>文件：</b>一个任务一个 json（文件名为任务名，内容就是该任务的 states）；多任务导出打包成 zip，导入支持 json / zip
+            <b>文件：</b>一个任务一个 yaml（文件名为任务名，内容就是该任务的 states）；多任务导出打包成 zip，导入支持 yaml / json / zip
         </div>
     </section>
 
-    <!-- ===== 右：JSON ===== -->
+    <!-- ===== 右：YAML ===== -->
     <aside class="pane pane-json">
         <div class="pane-head">
-            <span class="pane-title" id="jsonTitle">JSON 预览</span>
+            <span class="pane-title" id="jsonTitle">YAML 预览</span>
             <div class="pane-actions">
                 <button class="mini" id="btnCopy">复制</button>
                 <button class="mini" id="btnDownload">下载</button>
                 <button class="mini" id="btnImport">导入</button>
-                <input type="file" id="fileInput" accept=".json,.zip,application/json" multiple hidden>
+                <input type="file" id="fileInput" accept=".yaml,.yml,.json,.zip,application/x-yaml,application/json,application/zip" multiple hidden>
             </div>
         </div>
         <pre class="json" id="jsonOut"></pre>
@@ -587,7 +588,12 @@
       return arr;
     }
     function formatRegion(v){
-      return Array.isArray(v) && v.length === 4 ? v.join(",") : (v == null ? "" : String(v));
+      if(Array.isArray(v) && v.length === 4) return v.join(",");
+      if(v && typeof v === "object" && !Array.isArray(v)){
+        var l = Number(v.left), t = Number(v.top), w = Number(v.width), h = Number(v.height);
+        if(isFinite(l) && isFinite(t) && isFinite(w) && isFinite(h)) return [l, t, w, h].join(",");
+      }
+      return v == null ? "" : String(v);
     }
     /* 目标点：编辑态存 "x,y"，导出为二元数组，空为 null（用识别坐标） */
     function parsePoint(v){
@@ -598,7 +604,12 @@
       return (isFinite(arr[0]) && isFinite(arr[1])) ? arr : null;
     }
     function formatPoint(v){
-      return Array.isArray(v) && v.length === 2 ? v.join(",") : (v == null ? "" : String(v));
+      if(Array.isArray(v) && v.length === 2) return v.join(",");
+      if(v && typeof v === "object" && !Array.isArray(v)){
+        var x = Number(v.x), y = Number(v.y);
+        if(isFinite(x) && isFinite(y)) return [x, y].join(",");
+      }
+      return v == null ? "" : String(v);
     }
     /* 颜色：编辑态存 "0,0,0; 255,255,0"，导出为 [[r,g,b], ...] */
     function parseColors(v){
@@ -1009,7 +1020,7 @@
           + '<input type="text" value="' + esc(s.path || "") + '" data-path="' + p + '.path" '
           + 'placeholder="战斗/秘境寻踪-三层-三首领（相对 任务/ 目录，不写后缀）" spellcheck="false"></label>'
         + '<label class="param sel"><span>返回状态</span><select data-path="' + p + '.next">' + opts + '</select></label>'
-        + '<p class="empty-hint">这个状态不带规则：运行时到 任务/ 下读这个路径（自动补 .json，路径不用写后缀）当子任务，'
+        + '<p class="empty-hint">这个状态不带规则：运行时到 任务/ 下读这个路径（自动补 .yaml，路径不用写后缀）当子任务，'
           + '跑完文件里顶层「结束」后回到上面选的同层状态。文件由本编辑器的「下载」生成，内容就是状态数组。</p>'
         + '</div>';
     }
@@ -1033,27 +1044,26 @@
       if(stat.states > MAX_EDIT_STATES){
         ed.innerHTML = '<div class="empty-state"><p>该任务有 ' + stat.states + ' 个状态、' + stat.rules + ' 条规则，'
           + '超出可视化编辑上限（' + MAX_EDIT_STATES + ' 个状态）。</p>'
-          + '<div class="hint">这类任务通常是脚本批量生成的，建议改用 tasks_to_json.py / Python 侧修改；'
+          + '<div class="hint">这类任务通常是脚本批量生成的，建议改用 to_yaml.py / Python 侧修改；'
           + '仍可用右侧「下载」导出该任务，或换成更小的任务查看。</div></div>';
         return;
       }
       ed.innerHTML = renderStates(t.states, "tasks." + i + ".states", 0);
     }
 
-    /* 预览上限：超大任务的 JSON 高亮会卡住页面，超过就直接提示去下载 */
+    /* 预览上限：超大任务的 YAML 高亮会卡住页面，超过就直接提示去下载 */
     var MAX_PREVIEW = 200000;
-    /* 任务 JSON 文本：小任务带缩进方便看，超大任务走紧凑格式省时间省体积 */
+    /* 任务 YAML 文本：直接由任务数据序列化成 yaml */
     function taskText(t){
-      var big = !!t && countStates(t.states).states > MAX_EDIT_STATES;
-      return JSON.stringify(t ? taskStates(t) : [], null, big ? 0 : 2);
+      return yamlDump(t ? taskStates(t) : []);
     }
-    function renderJson(){
+    function renderYaml(){
       var el = document.getElementById("jsonOut");
       var title = document.getElementById("jsonTitle");
       var t = task();
-      if(title) title.textContent = t ? "JSON 预览 · " + fileName(t.name) + ".json" : "JSON 预览";
+      if(title) title.textContent = t ? "YAML 预览 · " + fileName(t.name) + ".yaml" : "YAML 预览";
       el.innerHTML = "";
-      if(!t){ el.innerHTML = highlight("[]"); return; }
+      if(!t){ el.innerHTML = highlightYaml("[]"); return; }
       var stat = countStates(t.states);
       if(stat.states > MAX_EDIT_STATES){
         el.textContent = "该任务有 " + stat.states + " 个状态、" + stat.rules + " 条规则，已省略预览。"
@@ -1066,13 +1076,29 @@
           + "用右侧「下载」导出该任务，或切换到更小的任务查看。";
         return;
       }
-      el.innerHTML = highlight(text);
+      el.innerHTML = highlightYaml(text);
     }
-    function highlight(json){
-      var safe = json.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-      return safe.replace(/("(?:\\.|[^"\\])*")(\s*:)?|\b(-?\d+(?:\.\d+)?)\b|\b(true|false|null)\b/g,
-        function(m, str, colon, num, kw){
-          if(str) return colon ? '<span class="j-key">' + str + '</span>' + colon : '<span class="j-str">' + str + '</span>';
+    /* YAML 高亮：键 / 值里的字符串 / 数字 / 布尔与 null */
+    function highlightYaml(text){
+      var safe = text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      return safe.split("\n").map(function(line){
+        var m = line.match(/^((?: *- )?)( *)((?:"[^"]*"|'[^']*'|[^:#]*?)):(?: +(.*))?$/);
+        if(m && m[3] !== ""){
+          var lead = m[1] ? '<span class="j-punc">' + m[1] + '</span>' : "";
+          var key = m[2] + '<span class="j-key">' + m[3] + '</span>:';
+          var val = m[4] ? " " + yamlValueSpan(m[4]) : "";
+          return lead + key + val;
+        }
+        var sq = line.match(/^( *- )((?:.*))$/);
+        if(sq){ return '<span class="j-punc">' + sq[1] + '</span>' + (sq[2] ? yamlValueSpan(sq[2]) : ""); }
+        return line;
+      }).join("\n");
+    }
+    function yamlValueSpan(v){
+      return v.replace(/(["'][^"']*["'])|(\[[^\]]*\]|\{[^}]*\})|(-?\d+(?:\.\d+)?)|(true|false|null)/g,
+        function(m, str, flow, num, kw){
+          if(str) return '<span class="j-str">' + str + '</span>';
+          if(flow) return '<span class="j-num">' + flow + '</span>';
           if(num) return '<span class="j-num">' + num + '</span>';
           if(kw) return '<span class="j-kw">' + kw + '</span>';
           return m;
@@ -1095,7 +1121,7 @@
       var o = { name: s.name || "", type: s.kind };
       if(s.mode === "subtasks"){
         var sub = s.subtask || { states:[] };
-        o.subtask = { states: sub.states.map(function(x){ return serializeState(x, (depth||0) + 1); }) };
+        o.subtask = sub.states.map(function(x){ return serializeState(x, (depth||0) + 1); });
       } else {
         // 顶层「结束」是终点，规则不执行，导出时统一为空
         o.rules = (depth||0) === 0 && s.kind === "end" ? [] : s.rules.map(function(r){
@@ -1130,11 +1156,11 @@
 
     /* ========== 软刷新（不重建编辑器，保留输入焦点） ========== */
     function softRefresh(){
-      renderTabs(); renderOutline(); renderChecks(); renderStats(); renderJson();
+      renderTabs(); renderOutline(); renderChecks(); renderStats(); renderYaml();
     }
     function render(){
       normalizeAll();
-      renderTabs(); renderOutline(); renderEditor(); renderChecks(); renderStats(); renderJson();
+      renderTabs(); renderOutline(); renderEditor(); renderChecks(); renderStats(); renderYaml();
     }
 
     /* ========== 交互 ========== */
@@ -1396,10 +1422,270 @@
       toastTimer = setTimeout(function(){ el.classList.remove("show"); }, 2000);
     }
 
+
+    /* ========== 自写 YAML 读写器：与 PyYAML safe_dump(sort_keys=False, allow_unicode=True) 兼容 ==========
+/* ===== 自写 YAML 子集读写器，与 PyYAML safe_dump(sort_keys=False, allow_unicode=True) 兼容 ===== */
+
+function repY(n){ var s=""; for(var i=0;i<n;i++) s+=" "; return s; }
+function isScalarY(v){ var t=typeof v; return v===null||v===undefined||t==="string"||t==="number"||t==="boolean"; }
+
+function needsQuoteY(s){
+  if(s==="") return true;
+  if(/^[ \t]/.test(s)||/[ \t]$/.test(s)||/[\n\r\t]/.test(s)) return true;
+  if(/[:{}\[\],#&*!|>'"%@`]/.test(s)) return true;
+  if(/^(~|null|Null|NULL|true|True|TRUE|false|False|FALSE|yes|Yes|YES|no|No|NO|on|On|ON|off|Off|OFF)$/.test(s)) return true;
+  if(/^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(s)) return true;
+  if(/^(0x[0-9a-fA-F]+|0o[0-7]+|\.inf|\.nan|\.Inf|\.NaN)$/.test(s)) return true;
+  if(/^[ \t\-?:]/.test(s)) return true;
+  return false;
+}
+function quoteY(s){
+  if(s.indexOf("'")>=0){
+    return '"'+s.replace(/\\/g,"\\\\").replace(/"/g,'\\"')+'"';
+  }
+  return "'"+s.replace(/'/g,"''")+"'";
+}
+function scalarY(v){
+  if(v===null||v===undefined) return "null";
+  if(typeof v==="boolean") return v?"true":"false";
+  if(typeof v==="number") return String(v);
+  var s=String(v);
+  return needsQuoteY(s)?quoteY(s):s;
+}
+function keyY(k){ return needsQuoteY(k)?quoteY(k):k; }
+function flowY(v){
+  return "["+v.map(flowElemY).join(", ")+"]";
+}
+function flowElemY(x){
+  if(Array.isArray(x)) return flowY(x);
+  return scalarY(x);
+}
+function isFlowSeqY(arr){
+  if(!arr.length) return true;
+  return arr.every(function(x){ return isScalarY(x)||(Array.isArray(x)&&x.every(isScalarY)); });
+}
+
+function emitMapY(obj, indent, isSeqItem, out){
+  var keyBase = isSeqItem ? indent+2 : indent;
+  var keys = Object.keys(obj);
+  for(var i=0;i<keys.length;i++){
+    var k=keys[i], v=obj[k];
+    var prefix = (isSeqItem&&i===0) ? repY(indent)+"- " : repY(keyBase);
+    var line = prefix + keyY(k) + ":";
+    if(v===null||v===undefined||isScalarY(v)){
+      out.push(line+" "+scalarY(v===undefined?null:v));
+    } else if(Array.isArray(v)){
+      if(isFlowSeqY(v)) out.push(line+" "+flowY(v));
+      else { out.push(line); emitSeqY(v, keyBase, out); }
+    } else {
+      out.push(line); emitMapY(v, keyBase+2, false, out);
+    }
+  }
+}
+function emitSeqY(list, indent, out){
+  for(var i=0;i<list.length;i++){
+    var item=list[i];
+    if(isScalarY(item)){ out.push(repY(indent)+"- "+scalarY(item===undefined?null:item)); }
+    else if(Array.isArray(item)){
+      if(isFlowSeqY(item)) out.push(repY(indent)+"- "+flowY(item));
+      else { out.push(repY(indent)+"-"); emitSeqY(item, indent+2, out); }
+    } else {
+      emitMapY(item, indent, true, out);
+    }
+  }
+}
+function yamlDump(obj){
+  if(Array.isArray(obj)){ var out=[]; emitSeqY(obj,0,out); return out.join("\n")+"\n"; }
+  if(obj&&typeof obj==="object"){ var out2=[]; emitMapY(obj,0,false,out2); return out2.join("\n")+"\n"; }
+  return scalarY(obj==null?null:obj)+"\n";
+}
+
+/* ---- parser ---- */
+function stripCommentY(line){
+  var inS=false,inD=false,out="";
+  for(var i=0;i<line.length;i++){
+    var ch=line[i];
+    if(inS){ if(ch==="'"){ if(line[i+1]==="'"){ out+="''"; i++; } else inS=false; } out+=ch; continue; }
+    if(inD){ if(ch==="\\"){ out+=ch+(line[i+1]||""); i++; } else if(ch==='"') inD=false; out+=ch; continue; }
+    if(ch==="'"){ inS=true; out+=ch; continue; }
+    if(ch==='"'){ inD=true; out+=ch; continue; }
+    if(ch==="#"&&(i===0||/\s/.test(line[i-1]))) break;
+    out+=ch;
+  }
+  return out;
+}
+function preprocessY(text){
+  var arr=String(text).replace(/\r\n?/g,"\n").split("\n");
+  var lines=[];
+  for(var i=0;i<arr.length;i++){
+    var s=stripCommentY(arr[i]);
+    var indent=0;
+    while(indent<s.length&&s[indent]===" ") indent++;
+    var content=s.substring(indent).replace(/[ \t]+$/,"");
+    if(content===""||content==="---"||content==="...") continue;
+    lines.push({indent:indent,content:content,line:i+1});
+  }
+  return lines;
+}
+function splitKeyY(content){
+  var depth=0,inS=false,inD=false;
+  for(var i=0;i<content.length;i++){
+    var ch=content[i];
+    if(inS){ if(ch==="'"){ if(content[i+1]==="'")i++; else inS=false; } continue; }
+    if(inD){ if(ch==="\\")i++; else if(ch==='"')inD=false; continue; }
+    if(ch==="'"){inS=true;continue;}
+    if(ch==='"'){inD=true;continue;}
+    if(ch==="["||ch==="{"){depth++;continue;}
+    if(ch==="]"||ch==="}"){depth--;continue;}
+    if(ch===":"&&depth===0){
+      return {key:content.substring(0,i).replace(/[ \t]+$/,""), rest:content.substring(i+1).replace(/^[ \t]+/,"")};
+    }
+  }
+  return null;
+}
+function parseScalarY(s){
+  if(s==="") return "";
+  if(s.length>=2&&s[0]==="'"&&s[s.length-1]==="'") return s.slice(1,-1).replace(/''/g,"'");
+  if(s.length>=2&&s[0]==='"'&&s[s.length-1]==='"') return s.slice(1,-1).replace(/\\"/g,'"').replace(/\\\\/g,"\\");
+  if(s==="~"||s==="null"||s==="Null"||s==="NULL") return null;
+  if(/^(true|True|TRUE)$/.test(s)) return true;
+  if(/^(false|False|FALSE)$/.test(s)) return false;
+  if(/^-?\d+$/.test(s)) return parseInt(s,10);
+  if(/^-?(\d+\.\d*|\.\d+)([eE][+-]?\d+)?$/.test(s)) return parseFloat(s);
+  if(/^-?\d+[eE][+-]?\d+$/.test(s)) return parseFloat(s);
+  return s;
+}
+function splitFlowY(str){
+  var out=[],depth=0,inS=false,inD=false,cur="";
+  for(var i=0;i<str.length;i++){
+    var ch=str[i];
+    if(inS){ if(ch==="'"){ if(str[i+1]==="'"){ cur+="''"; i++; } else inS=false; } cur+=ch; continue; }
+    if(inD){ if(ch==="\\"){ cur+=ch+(str[i+1]||""); i++; } else if(ch==='"')inD=false; cur+=ch; continue; }
+    if(ch==="'"){inS=true;cur+=ch;continue;}
+    if(ch==='"'){inD=true;cur+=ch;continue;}
+    if(ch==="["||ch==="{"){depth++;cur+=ch;continue;}
+    if(ch==="]"||ch==="}"){depth--;cur+=ch;continue;}
+    if(ch===","&&depth===0){ out.push(cur.trim()); cur=""; continue; }
+    cur+=ch;
+  }
+  if(cur.trim()!=="") out.push(cur.trim());
+  return out;
+}
+function parseFlowY(str){
+  str=str.trim();
+  if(str[0]==="["){
+    if(str==="[]"||str==="[ ]") return [];
+    return splitFlowY(str.slice(1,-1)).map(parseFlowElemY);
+  }
+  if(str[0]==="{"){
+    if(str==="{}"||str==="{ }") return {};
+    var o={};
+    splitFlowY(str.slice(1,-1)).forEach(function(part){
+      var m=splitKeyY(part);
+      if(m) o[m.key]=parseFlowElemY(m.rest);
+    });
+    return o;
+  }
+  return parseScalarY(str);
+}
+function parseFlowElemY(e){
+  if(e[0]==="["||e[0]==="{") return parseFlowY(e);
+  return parseScalarY(e);
+}
+function isSeqLineY(c){ return c==="-"||(c.length>=2&&c[0]==="-"&&c[1]===" "); }
+
+function Parser(lines){
+  this.lines=lines; this.i=0;
+}
+Parser.prototype.parseBlock=function(indent){
+  if(this.i>=this.lines.length) return null;
+  var c=this.lines[this.i].content;
+  return isSeqLineY(c)?this.parseSeq(indent):this.parseMap(indent);
+};
+Parser.prototype.parseSeq=function(indent){
+  var arr=[],L=this.lines;
+  while(this.i<L.length){
+    var ln=L[this.i];
+    if(ln.indent!==indent||!isSeqLineY(ln.content)) break;
+    var c=ln.content;
+    var rest=c==="-"?"":c.slice(2);
+    this.i++;
+    if(rest===""){
+      var nx=L[this.i];
+      if(nx&&nx.indent>indent) arr.push(this.parseBlock(nx.indent));
+      else arr.push(null);
+    } else if(isSeqLineY(rest)){
+      var sub=[{indent:indent+2,content:rest,line:ln.line}];
+      while(this.i<L.length&&L[this.i].indent===indent+2&&isSeqLineY(L[this.i].content)){ sub.push(L[this.i]); this.i++; }
+      var p2=new Parser(sub);
+      arr.push(p2.parseBlock(sub[0].indent));
+    } else if(splitKeyY(rest)!==null){
+      arr.push(this.parseMapItem(indent, rest));
+    } else if(rest[0]==="["||rest[0]==="{"){
+      arr.push(parseFlowY(rest));
+    } else {
+      arr.push(parseScalarY(rest));
+    }
+  }
+  return arr;
+};
+Parser.prototype.parseMapItem=function(seqIndent, firstRest){
+  var obj={},keyIndent=seqIndent+2,L=this.lines;
+  var key;
+  function assign(rest){
+    if(rest===""||rest==="null"||rest==="~"){
+      var nx=L[this.i];
+      if(nx&&(nx.indent>keyIndent||(nx.indent===keyIndent&&isSeqLineY(nx.content)))) obj[key]=this.parseBlock(nx.indent);
+      else obj[key]=null;
+    } else if(rest[0]==="["||rest[0]==="{") obj[key]=parseFlowY(rest);
+    else obj[key]=parseScalarY(rest);
+  }
+  var m=splitKeyY(firstRest);
+  key=m.key;
+  assign.call(this, m.rest);
+  while(this.i<L.length && L[this.i].indent===keyIndent){
+    var ln=L[this.i];
+    if(isSeqLineY(ln.content)) break;
+    var mm=splitKeyY(ln.content);
+    if(!mm){ this.i++; continue; }
+    this.i++;
+    key=mm.key;
+    assign.call(this, mm.rest);
+  }
+  return obj;
+};
+Parser.prototype.parseMap=function(indent){
+  var obj={},L=this.lines;
+  while(this.i<L.length){
+    var ln=L[this.i];
+    if(ln.indent!==indent) break;
+    var c=ln.content;
+    if(isSeqLineY(c)) break;
+    var m=splitKeyY(c);
+    if(!m){ this.i++; continue; }
+    this.i++;
+    var key=m.key, rest=m.rest;
+    if(rest===""||rest==="null"||rest==="~"){
+      var nx=L[this.i];
+      if(nx&&(nx.indent>indent||(nx.indent===indent&&isSeqLineY(nx.content)))) obj[key]=this.parseBlock(nx.indent);
+      else obj[key]=null;
+    } else if(rest[0]==="["||rest[0]==="{") obj[key]=parseFlowY(rest);
+    else obj[key]=parseScalarY(rest);
+  }
+  return obj;
+};
+function parseYaml(text){
+  var lines=preprocessY(text);
+  if(!lines.length) return null;
+  if(!isSeqLineY(lines[0].content)&&splitKeyY(lines[0].content)===null) return parseScalarY(lines[0].content);
+  var p=new Parser(lines);
+  return p.parseBlock(lines[0].indent);
+}
+
     /* ========== 导入 / 导出 ========== */
-    /* 文件名即任务名：去掉 .json，替换掉 Windows 不允许的字符 */
+    /* 文件名即任务名：去掉 .yaml/.yml/.json，替换掉 Windows 不允许的字符 */
     function fileName(name){
-      var raw = String(name || "").replace(/\.json$/i, "").replace(/[\\/:*?"<>|]/g, "_").trim();
+      var raw = String(name || "").replace(/\.(yaml|yml|json)$/i, "").replace(/[\\/:*?"<>|]/g, "_").trim();
       return raw || "未命名任务";
     }
     /* 一个状态：有 name，且带 type/kind/rules/subtask 之一 */
@@ -1456,9 +1742,14 @@
       if(["begin","custom","end"].indexOf(kind) < 0) kind = "custom";
       var st = { id:nid("st"), name:s.name || "状态", kind:kind, mode:"rules", rules:[],
                  subtask:{ states:[] }, path:"", next:"" };
-      var subSrc = s.subtask || (Array.isArray(s.subtasks) ? s.subtasks[0] : null);
-      var subStates = (subSrc && Array.isArray(subSrc.states)) ? subSrc.states : null;
-      if(subStates && !s.rules){
+      /* 唯一写法：subtask 必须是列表 `subtask: [ ... ]` */
+      var sub = s.subtask;
+      if(sub !== undefined && sub !== null && !Array.isArray(sub)){
+        throw new Error("状态「" + (s.name || "") + "」的 subtask 必须用列表写法 `subtask: [ ... ]`，不要用 `subtask: {states: [...]}`");
+      }
+      var subStates = (Array.isArray(sub) && sub.length > 0) ? sub : null;
+      // 子任务模式判定：有子任务状态，且没有实际规则（容忍子任务状态显式写 rules: []）
+      if(subStates && !(s.rules && s.rules.length)){
         st.mode = "subtasks";
         st.subtask = { states: subStates.map(function(x){ return adoptState(x, (depth||0) + 1); }) };
       } else if((depth||0) === 0 && kind === "end"){
@@ -1529,7 +1820,7 @@
         var reader = new FileReader();
         reader.onload = function(){
           try {
-            results[index] = isZip ? tasksFromZip(reader.result) : tasksFromJson(file.name, reader.result);
+            results[index] = isZip ? tasksFromZip(reader.result) : tasksFromText(file.name, reader.result);
             var got = results[index] || [];
             if(!got.length){ failed.push(file.name + "（没有可导入的任务）"); }
           } catch(e){
@@ -1540,15 +1831,17 @@
         if(isZip) reader.readAsArrayBuffer(file);
         else reader.readAsText(file);
       });
-      function tasksFromJson(name, text){
-        return tasksFromFile(name, JSON.parse(String(text)));
+      /* 按扩展名解析：.yaml/.yml 走 YAML，其余（.json 等）走 JSON */
+      function tasksFromText(name, text){
+        var isYaml = /\.(yaml|yml)$/i.test(String(name));
+        return tasksFromFile(name, isYaml ? parseYaml(String(text)) : JSON.parse(String(text)));
       }
       function tasksFromZip(buffer){
         var zip = readZip(buffer);
         if(zip.error) throw new Error(zip.error);
         var list = [];
         zip.entries.forEach(function(entry){
-          try { list = list.concat(tasksFromFile(entry.name, JSON.parse(entry.text))); }
+          try { list = list.concat(tasksFromText(entry.name, entry.text)); }
           catch(e){ failed.push(entry.name + "（" + e.message + "）"); }
         });
         return list;
@@ -1569,7 +1862,7 @@
     });
 
     function saveBlob(text, name){
-      saveBytes(new Blob([text], { type:"application/json;charset=utf-8" }), name);
+      saveBytes(new Blob([text], { type:"application/x-yaml;charset=utf-8" }), name);
     }
     function saveBytes(blob, name){
       var url = URL.createObjectURL(blob);
@@ -1581,24 +1874,24 @@
       document.body.removeChild(a);
       setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
     }
-    /* 单个任务：文件名「任务名.json」，内容就是该任务的 states */
+    /* 单个任务：文件名「任务名.yaml」，内容就是该任务的 states */
     function downloadTask(t){
-      saveBlob(taskText(t), fileName(t.name) + ".json");
+      saveBlob(taskText(t), fileName(t.name) + ".yaml");
     }
-    /* 全部任务：一个任务一个 json；多个任务打包成一个 zip（浏览器不允许一次静默下多个文件） */
+    /* 全部任务：一个任务一个 yaml；多个任务打包成一个 zip（浏览器不允许一次静默下多个文件） */
     function downloadAll(){
       if(!APP.tasks.length){ toast("还没有任务可导出"); return; }
       if(APP.tasks.length === 1){
         downloadTask(APP.tasks[0]);
-        toast("已导出 " + fileName(APP.tasks[0].name) + ".json");
+        toast("已导出 " + fileName(APP.tasks[0].name) + ".yaml");
         return;
       }
       var enc = new TextEncoder();
       var entries = APP.tasks.map(function(t){
-        return { name: fileName(t.name) + ".json", bytes: enc.encode(JSON.stringify(taskStates(t), null, 2)) };
+        return { name: fileName(t.name) + ".yaml", bytes: enc.encode(yamlDump(taskStates(t))) };
       });
       saveBytes(new Blob([makeZip(entries)], { type:"application/zip" }), "任务脚本-" + APP.tasks.length + "个任务.zip");
-      toast("已导出 " + APP.tasks.length + " 个任务（解压后每个任务一个 json）");
+      toast("已导出 " + APP.tasks.length + " 个任务（解压后每个任务一个 yaml）");
     }
 
     /* ========== 最小 zip 读写（store 模式，无压缩；只服务本页导出/导入） ========== */
@@ -1691,14 +1984,14 @@
         var localNameLen = view.getUint16(localOffset + 26, true);
         var localExtraLen = view.getUint16(localOffset + 28, true);
         var start = localOffset + 30 + localNameLen + localExtraLen;
-        if(/\.json$/i.test(name)) entries.push({ name:name, text:decoder.decode(bytes.subarray(start, start + size)) });
+        if(/\.(yaml|yml|json)$/i.test(name)) entries.push({ name:name, text:decoder.decode(bytes.subarray(start, start + size)) });
         pointer += 46 + nameLen + extraLen + commentLen;
       }
       return { entries:entries };
     }
     function copyText(text){
       if(navigator.clipboard && navigator.clipboard.writeText){
-        navigator.clipboard.writeText(text).then(function(){ toast("JSON 已复制到剪贴板"); })
+        navigator.clipboard.writeText(text).then(function(){ toast("YAML 已复制到剪贴板"); })
           .catch(function(){ fallbackCopy(text); });
       } else fallbackCopy(text);
     }
@@ -1709,7 +2002,7 @@
       ta.style.opacity = "0";
       document.body.appendChild(ta);
       ta.select();
-      try { document.execCommand("copy"); toast("JSON 已复制"); }
+      try { document.execCommand("copy"); toast("YAML 已复制"); }
       catch(e){ toast("复制失败，请手动选择文本"); }
       document.body.removeChild(ta);
     }

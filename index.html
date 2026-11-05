@@ -236,6 +236,10 @@
             .main-layout .item {
                 margin-bottom: 10px;
             }
+            /* 画面到状态栏：收窄（原本 10+10 叠出了 20px 空档） */
+            .main-layout .screen-item {
+                margin-bottom: 4px;
+            }
             .control-column {
                 gap: 0;
             }
@@ -273,8 +277,10 @@
                 height: 26px;
                 font-size: 10px;
             }
+            /* 状态栏：贴近上方画面，与下方按钮拉开 */
             #statusBar {
                 font-size: 12px;
+                margin: 4px 0 14px;
             }
         }
     </style>

@@ -422,6 +422,7 @@
 <script>
     let ws = null;
     let seq = 0;          // 请求自增 id
+    let lastSeq = 0;      // 最近一次渲染的抓帧序号（服务端异步下发的帧用它丢弃过期帧）
     let authed = false;   // 是否通过鉴权
     let authTimer = null;
     const wsUrlInput = document.getElementById('wsUrl');
@@ -461,7 +462,17 @@
 
     // 选点状态
     let currentImageBlobUrl = null;
-    let pointList = []; // {x:像素X,y:像素Y}
+    let pointList = []; // {x:像素X,y:像素Y} —— 始终是真实桌面像素
+    // 服务端下发的原始桌面尺寸（预览图可能被缩小，坐标必须以它为准）
+    let screenW = 0;
+    let screenH = 0;
+
+    // 坐标基准：优先用服务端给的原始尺寸，没有才退回图片自身尺寸
+    function imgSize(){
+        const w = screenW || (mainImg ? mainImg.naturalWidth : 0);
+        const h = screenH || (mainImg ? mainImg.naturalHeight : 0);
+        return {w: w, h: h};
+    }
 
     function setStatus(text){
         statusBar.innerText = text;
@@ -508,15 +519,17 @@
     // 让选点画布覆盖图片的实际显示区域（对齐 contain 后的图片位置）
     function positionMainCanvas(){
         if(!mainImg) return;
+        const size = imgSize();
+        if(!size.w || !size.h) return;
         const imgRect = mainImg.getBoundingClientRect();
         const areaRect = screenArea.getBoundingClientRect();
-        const c = containRect(imgRect.width, imgRect.height, mainImg.naturalWidth, mainImg.naturalHeight);
+        const c = containRect(imgRect.width, imgRect.height, size.w, size.h);
         screenPointCanvas.style.left = (imgRect.left - areaRect.left + c.x) + 'px';
         screenPointCanvas.style.top = (imgRect.top - areaRect.top + c.y) + 'px';
         screenPointCanvas.style.width = c.w + 'px';
         screenPointCanvas.style.height = c.h + 'px';
-        screenPointCanvas.width = mainImg.naturalWidth;
-        screenPointCanvas.height = mainImg.naturalHeight;
+        screenPointCanvas.width = size.w;
+        screenPointCanvas.height = size.h;
         renderMainPoints();
     }
 
@@ -528,25 +541,29 @@
     // 将指针位置换算为图像原始像素坐标；落在 contain 留白外则返回 null
     function pointFromPointer(e){
         if(!mainImg) return null;
+        const size = imgSize();
+        if(!size.w || !size.h) return null;
         const rect = mainImg.getBoundingClientRect();
-        const c = containRect(rect.width, rect.height, mainImg.naturalWidth, mainImg.naturalHeight);
+        const c = containRect(rect.width, rect.height, size.w, size.h);
         const x = e.clientX - rect.left - c.x;
         const y = e.clientY - rect.top - c.y;
         if(x < 0 || y < 0 || x > c.w || y > c.h) return null;
         return {
-            x: Math.round(x * mainImg.naturalWidth / c.w),
-            y: Math.round(y * mainImg.naturalHeight / c.h)
+            x: Math.round(x * size.w / c.w),
+            y: Math.round(y * size.h / c.h)
         };
     }
 
     // 将指针位置换算为图像原始像素坐标（不判断边界，供拖动增量计算）
     function pointerPosRaw(e){
         if(!mainImg) return null;
+        const size = imgSize();
+        if(!size.w || !size.h) return null;
         const rect = mainImg.getBoundingClientRect();
-        const c = containRect(rect.width, rect.height, mainImg.naturalWidth, mainImg.naturalHeight);
+        const c = containRect(rect.width, rect.height, size.w, size.h);
         return {
-            x: Math.round((e.clientX - rect.left - c.x) * mainImg.naturalWidth / c.w),
-            y: Math.round((e.clientY - rect.top - c.y) * mainImg.naturalHeight / c.h)
+            x: Math.round((e.clientX - rect.left - c.x) * size.w / c.w),
+            y: Math.round((e.clientY - rect.top - c.y) * size.h / c.h)
         };
     }
 
@@ -704,10 +721,30 @@
             resolve(obj.result);
             return;
         }
+        // capture 的即时回执：真正的一帧稍后异步下发
+        if(obj.result && obj.result.pending){
+            setStatus('抓帧中...');
+            return;
+        }
         // capture 的响应：result.fmt=jpeg 且带 payload
         if(obj.result && obj.result.fmt === 'jpeg' && payloads.length > 0){
+            if(obj.seq !== undefined){
+                if(obj.seq < lastSeq){ return; } // 晚到的过期帧直接丢弃
+                lastSeq = obj.seq;
+            }
+            // 记录原始桌面尺寸：预览图可能被服务端缩小，坐标换算要用它
+            if(obj.result.width && obj.result.height){
+                screenW = obj.result.width;
+                screenH = obj.result.height;
+            }
             showScreenImage(new Blob([payloads[0]], {type:'image/jpeg'}));
             setStatus('画面已更新');
+            refreshBtn.disabled = false;
+            return;
+        }
+        // 抓帧失败（没有 payload）
+        if(obj.result && obj.result.fmt === 'jpeg' && obj.seq !== undefined){
+            setStatus('❌ 抓帧失败');
             refreshBtn.disabled = false;
             return;
         }
@@ -942,6 +979,9 @@
         }
         authed = false;
         seq = 0;
+        lastSeq = 0;
+        screenW = 0;
+        screenH = 0;
         ws = new WebSocket(url);
         ws.binaryType = "arraybuffer";
 

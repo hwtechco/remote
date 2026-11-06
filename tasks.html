@@ -1109,16 +1109,16 @@
     function taskStates(t){
       return t.states.map(function(s){ return serializeState(s, 0); });
     }
+    /* 不写 type：类型由 name（开始/结束）和 path（引用）推断 */
     function serializeState(s, depth){
       if(s.mode === "include"){
         return {
           name: s.name || "",
-          type: "include",
           path: String(s.path || "").trim(),
           next: String(s.next || "").trim() || null
         };
       }
-      var o = { name: s.name || "", type: s.kind };
+      var o = { name: s.name || "" };
       if(s.mode === "subtasks"){
         var sub = s.subtask || { states:[] };
         o.subtask = sub.states.map(function(x){ return serializeState(x, (depth||0) + 1); });
@@ -1688,10 +1688,10 @@ function parseYaml(text){
       var raw = String(name || "").replace(/\.(yaml|yml|json)$/i, "").replace(/[\\/:*?"<>|]/g, "_").trim();
       return raw || "未命名任务";
     }
-    /* 一个状态：有 name，且带 type/kind/rules/subtask 之一 */
+    /* 一个状态：有 name，且带 path/rules/subtask 之一 */
     function isStateLike(o){
       return !!o && typeof o === "object" && typeof o.name === "string"
-        && (typeof o.type === "string" || typeof o.kind === "string" || Array.isArray(o.rules) || !!o.subtask);
+        && (typeof o.path === "string" || Array.isArray(o.rules) || !!o.subtask);
     }
     /* 单个文件 → 一个或多个任务；文件名作为任务名 */
     function tasksFromFile(name, data){
@@ -1733,13 +1733,28 @@ function parseYaml(text){
         };
       });
     }
+    /* 类型只由 name 与 path 决定：names 开始/结束 → begin/end；有 path → include；其余 custom。
+       两者同时出现说明文件写错了，直接报错，不再看旧文件的 type */
+    function stateKindOf(s){
+      var name = String(s.name || "").trim();
+      var hasPath = !!String(s.path || "").trim();
+      if(hasPath){
+        if(name === "开始" || name === "结束"){
+          throw new Error("状态「" + name + "」既有 path 又用了「" + name + "」这个名字，无法判断是引用还是" + (name === "开始" ? "开始" : "结束") + "状态");
+        }
+        return "include";
+      }
+      if(!name) throw new Error("有状态没有 name，无法判断类型");
+      if(name === "开始") return "begin";
+      if(name === "结束") return "end";
+      return "custom";
+    }
     function adoptState(s, depth){
-      var kind = (s.type || s.kind || "custom");
+      var kind = stateKindOf(s);
       if(kind === "include"){
-        return { id:nid("st"), name:s.name || "状态", kind:"custom", mode:"include",
+        return { id:nid("st"), name:String(s.name || "状态").trim(), kind:"custom", mode:"include",
                  path:s.path || "", next:s.next || "", rules:[], subtask:{ states:[] } };
       }
-      if(["begin","custom","end"].indexOf(kind) < 0) kind = "custom";
       var st = { id:nid("st"), name:s.name || "状态", kind:kind, mode:"rules", rules:[],
                  subtask:{ states:[] }, path:"", next:"" };
       /* 唯一写法：subtask 必须是列表 `subtask: [ ... ]` */

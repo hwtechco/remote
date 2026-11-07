@@ -30,6 +30,29 @@
             margin-bottom: 12px;
             flex-shrink: 0;
         }
+        /* 连接栏：u + p1 + p2 + token + 按钮 */
+        .conn-bar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .conn-bar #wsUrl {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .conn-bar .port-input {
+            width: 110px;
+            flex: 0 0 auto;
+        }
+        .conn-bar #wsToken {
+            width: 150px;
+            flex: 0 0 auto;
+        }
+        /* 连接按钮不参与压缩，避免文字被挤成两行 */
+        .conn-bar #connectBtn {
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
         /* 主布局：PC 端左 2/3 画面 + 右 1/3 控制区 */
         .main-layout {
             display: flex;
@@ -250,6 +273,19 @@
                 font-size: 16px;
                 padding: 8px 10px;
             }
+            /* 连接栏在窄屏换行：u 独占一行，端口/Token 等分剩余宽度 */
+            .conn-bar {
+                flex-wrap: wrap;
+            }
+            .conn-bar #wsUrl {
+                flex: 1 1 100%;
+            }
+            .conn-bar .port-input,
+            .conn-bar #wsToken {
+                flex: 1 1 0;
+                width: auto;
+                min-width: 0;
+            }
             .shortcut-bar {
                 gap: 6px;
             }
@@ -288,9 +324,11 @@
 <body>
 <div class="container">
     <div class="item">
-        <div style="display:flex; gap:10px; align-items:center;">
-                <input id="wsUrl" type="text" autocomplete="off" placeholder="WebSocket地址" style="flex:1; min-width:0;">
-            <input id="wsToken" type="text" autocomplete="off" style="width:150px; flex-shrink:0;" placeholder="Token">
+        <div class="conn-bar">
+            <input autocomplete="off" id="wsUrl" placeholder="WebSocket 地址（如 ws://192.168.1.5）" type="text">
+            <input autocomplete="off" class="port-input" id="p1Input" inputmode="numeric" placeholder="主控端口" type="text">
+            <input autocomplete="off" class="port-input" id="p2Input" inputmode="numeric" placeholder="抓帧端口" type="text">
+            <input autocomplete="off" id="wsToken" placeholder="Token" type="text">
             <button id="connectBtn">连接</button>
         </div>
     </div>
@@ -426,30 +464,63 @@
 </div>
 
 <script>
-    let ws = null;
+    let ws = null;        // 主控连接（键鼠/任务）
+    let wsCapture = null; // 抓帧连接（capture 端口）
     let seq = 0;          // 请求自增 id
     let lastSeq = 0;      // 最近一次渲染的抓帧序号（服务端异步下发的帧用它丢弃过期帧）
-    let authed = false;   // 是否通过鉴权
+    let authed = false;   // 主控连接是否通过鉴权
+    let capAuthed = false; // 抓帧连接是否通过鉴权
     let authTimer = null;
     const wsUrlInput = document.getElementById('wsUrl');
+    const p1Input = document.getElementById('p1Input');
+    const p2Input = document.getElementById('p2Input');
     const wsToken = document.getElementById('wsToken');
     const connectBtn = document.getElementById('connectBtn');
     const refreshBtn = document.getElementById('refreshBtn');
     const addMainPointBtn = document.getElementById('addMainPointBtn');
     const statusBar = document.getElementById('statusBar');
 
-    // 从 URL 查询参数读取 ws 地址 / token 并填入（token 不设默认值）
+    // 把 ws 地址拆成 协议/主机/端口/路径，便于按 p1/p2 拼出两个端口地址
+    function splitWs(url){
+        let u = (url || '').trim();
+        if(!u){ return {scheme:'ws://', host:'', port:null, path:''}; }
+        if(!/^wss?:\/\//.test(u)){ u = 'ws://' + u; } // 手填裸地址时补协议
+        const m = /^(wss?:\/\/)([^/:]+)(?::(\d+))?(\/.*)?$/.exec(u);
+        if(!m){ return {scheme:'ws://', host:'', port:null, path:''}; }
+        return {scheme:m[1], host:m[2], port:m[3] ? Number(m[3]) : null, path:m[4] || ''};
+    }
+    function joinWs(parts, port){
+        if(!parts.host){ return ''; }
+        return parts.scheme + parts.host + (port ? ':' + port : '') + parts.path;
+    }
+
+    // 服务端地址格式：u=ws://ip&p1=9527&p2=9394&t=xxx
+    // 页面把 u 当主机，p1 / p2 分别填主控与抓帧端口
     (function(){
         const params = new URLSearchParams(location.search);
-        const urlFromParam = params.get('u');
-        if(urlFromParam){
-            wsUrlInput.value = urlFromParam.trim();
-        }
-        const tokenFromParam = params.get('t');
-        if(tokenFromParam){
-            wsToken.value = tokenFromParam.trim();
-        }
+        const u = (params.get('u') || '').trim();
+        const token = params.get('t');
+        if(token){ wsToken.value = token.trim(); }
+        if(!u){ return; }
+        wsUrlInput.value = u; // u 原样保留（可能自带端口）
+        const parts = splitWs(u);
+        p1Input.value = params.get('p1') || (parts.port ? String(parts.port) : '');
+        p2Input.value = params.get('p2') || '';
     })();
+
+    // 主控地址 = u + p1（p1 为空时用 u 里自带的端口）
+    function commandUrl(){
+        const parts = splitWs(wsUrlInput.value);
+        const port = parseInt(p1Input.value, 10) || parts.port;
+        return joinWs(parts, port);
+    }
+
+    // 抓帧地址 = u + p2
+    function captureUrl(){
+        const parts = splitWs(wsUrlInput.value);
+        const port = parseInt(p2Input.value, 10);
+        return port ? joinWs(parts, port) : '';
+    }
 
     // 图片显示区域
     const screenArea = document.getElementById('screenArea');
@@ -656,11 +727,67 @@
 
     // ================== 新协议（JSON-RPC）相关 ==================
 
-    // 发送一次 RPC 请求（fire-and-forget）
+    // 发送一次 RPC 请求（fire-and-forget）：capture 走抓帧连接，其余走主控连接
     function rpc(method, params){
         if(!authed){ return false; }
         ws.send(JSON.stringify({id: ++seq, method: method, params: params || {}}));
         return true;
+    }
+
+    // 抓帧请求单独走采集连接；服务端立即回执、帧异步下发
+    function requestCapture(params){
+        if(!(wsCapture && capAuthed)){ return false; }
+        wsCapture.send(JSON.stringify({id: ++seq, method: 'capture', params: params || {}}));
+        return true;
+    }
+
+    // 采集连接：鉴权后与主控连接并行工作，互不阻塞
+    function openCapture(){
+        const url = captureUrl();
+        if(!url){
+            setStatus('⚠️ 未填写抓帧端口 p2');
+            return;
+        }
+        capAuthed = false;
+        lastSeq = 0; // 服务端 seq 按连接自增，重连后从 1 重新开始
+        wsCapture = new WebSocket(url);
+        wsCapture.binaryType = 'arraybuffer';
+        wsCapture.onopen = ()=>{
+            wsCapture.send(JSON.stringify({type:'auth', token: wsToken.value.trim()}));
+        };
+        wsCapture.onmessage = (evt)=>{
+            if(evt.data instanceof ArrayBuffer){
+                const f = decodeFrame(evt.data);
+                if(f) handleServerMessage(f.head, f.payloads);
+                return;
+            }
+            try{
+                const obj = JSON.parse(evt.data);
+                if(obj.type === 'auth_ok'){
+                    capAuthed = true;
+                    setStatus('✅ 抓帧连接就绪');
+                    requestCapture();
+                    return;
+                }
+                handleServerMessage(obj, []);
+            }catch(e){
+                setStatus('收到消息：' + evt.data);
+            }
+        };
+        wsCapture.onerror = ()=>{ capAuthed = false; };
+        wsCapture.onclose = (e)=>{
+            capAuthed = false;
+            wsCapture = null;
+            if(authed){
+                setStatus('⚠️ 抓帧连接断开 code:' + e.code);
+            }
+        };
+    }
+
+    function closeCapture(){
+        capAuthed = false;
+        if(wsCapture){ try{ wsCapture.close(); }catch(_){} }
+        wsCapture = null;
     }
 
     // 带响应的 RPC：响应到达后 resolve(result)；超时或出错 reject
@@ -702,40 +829,20 @@
     }
 
     // 处理服务端下行消息（文本 JSON 或二进制帧）
+    // 服务端协议：{id, ok, msg, result}；抓帧帧头额外带 seq 与 payloads
     function handleServerMessage(obj, payloads){
         if(obj.type === 'auth_ok'){
             authed = true;
             clearTimeout(authTimer);
             setStatus('✅ 鉴权成功，WebSocket 就绪');
             setActionButtonsEnabled(true);
-            rpc('capture'); // 连接成功后抓一帧
+            openCapture(); // 主控就绪后再连采集端口，抓一帧
             return;
         }
-        if(obj.error){
-            setStatus('❌ 命令失败: ' + (obj.error.msg !== undefined ? obj.error.msg : 'code ' + obj.error.code));
-            if(obj.id !== undefined && pendingRpc.has(obj.id)){
-                const reject = pendingRpc.get(obj.id);
-                pendingRpc.delete(obj.id);
-                reject(new Error(obj.error.msg !== undefined ? obj.error.msg : ('code ' + obj.error.code)));
-            }
-            return;
-        }
-        // 处理带响应的 RPC（如 mouse_position）
-        if(obj.id !== undefined && pendingRpc.has(obj.id)){
-            const resolve = pendingRpc.get(obj.id);
-            pendingRpc.delete(obj.id);
-            resolve(obj.result);
-            return;
-        }
-        // capture 的即时回执：真正的一帧稍后异步下发
-        if(obj.result && obj.result.pending){
-            setStatus('抓帧中...');
-            return;
-        }
-        // capture 的响应：result.fmt=jpeg 且带 payload
+        // 抓帧成功：二进制帧（result.fmt=jpeg + payload）
         if(obj.result && obj.result.fmt === 'jpeg' && payloads.length > 0){
             if(obj.seq !== undefined){
-                if(obj.seq < lastSeq){ return; } // 晚到的过期帧直接丢弃
+                if(obj.seq <= lastSeq){ return; } // 晚到的过期帧直接丢弃
                 lastSeq = obj.seq;
             }
             // 记录原始桌面尺寸：预览图可能被服务端缩小，坐标换算要用它
@@ -748,10 +855,31 @@
             refreshBtn.disabled = false;
             return;
         }
-        // 抓帧失败（没有 payload）
-        if(obj.result && obj.result.fmt === 'jpeg' && obj.seq !== undefined){
-            setStatus('❌ 抓帧失败');
-            refreshBtn.disabled = false;
+        // 抓帧受理：帧稍后下发
+        if(obj.ok === true && obj.msg === 'pending'){
+            setStatus('抓帧中...');
+            return;
+        }
+        // 被更新的抓帧请求合并掉：静默忽略，不当作错误
+        if(obj.ok === false && obj.msg === 'merged'){
+            return;
+        }
+        // 失败回执（命令执行失败 / 抓帧失败 / 未知方法 / 参数错误）
+        if(obj.ok === false){
+            const msg = obj.msg !== undefined ? obj.msg : '未知错误';
+            if(obj.id !== undefined && pendingRpc.has(obj.id)){
+                const reject = pendingRpc.get(obj.id);
+                pendingRpc.delete(obj.id);
+                reject(new Error(msg));
+            }
+            setStatus('❌ ' + msg);
+            return;
+        }
+        // 带响应的 RPC（如 mouse_position）：id 命中后交回 Promise
+        if(obj.id !== undefined && pendingRpc.has(obj.id)){
+            const resolve = pendingRpc.get(obj.id);
+            pendingRpc.delete(obj.id);
+            resolve(obj.result);
             return;
         }
         // 其它命令的普通回执
@@ -924,14 +1052,17 @@
         }
         captureTimer = setTimeout(()=>{
             captureTimer = null;
-            if(authed){ rpc('capture'); }
+            if(authed){ requestCapture(); }
         }, 1000);
     }
 
     // 发送截图命令（刷新画面按钮，即时发送，不做延迟）
     function sendCapture(){
         if(!authed){ alert('未完成连接'); return; }
-        rpc('capture');
+        if(!requestCapture()){
+            setStatus('抓帧连接未就绪');
+            return;
+        }
         setStatus('已发送 capture');
     }
 
@@ -975,15 +1106,22 @@
 
     connectBtn.addEventListener('click',()=>{
         if(ws){
+            closeCapture();
             ws.close();
             return;
         }
-        const url = wsUrlInput.value.trim();
-        if(!url){
-            alert('请输入ws地址');
+        const parts = splitWs(wsUrlInput.value);
+        if(!parts.host){
+            alert('请填写 WebSocket 地址（u）');
             return;
         }
+        if(!(parseInt(p1Input.value, 10) || parts.port)){
+            alert('请填写主控端口 p1');
+            return;
+        }
+        const url = commandUrl();
         authed = false;
+        capAuthed = false;
         seq = 0;
         lastSeq = 0;
         screenW = 0;
@@ -1028,6 +1166,7 @@
         ws.onclose = (e)=>{
             clearTimeout(authTimer);
             authed = false;
+            closeCapture(); // 主控断开时一并断开抓帧连接
             let msg;
             if(e.code === 4001){
                 msg = '🔌 鉴权失败（token 不正确）';

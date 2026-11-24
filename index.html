@@ -843,18 +843,86 @@
         dragState = null;
     }
 
+    // 落点动效：水波纹由大到小收拢到落点，约 0.8s；只在新选点时播放，避免常驻耗电
+    const POINT_RIPPLE_MS = 820;
+    let pointAnimFrame = 0;
+
+    function easeOutCubic(x){
+        return 1 - Math.pow(1 - x, 3);
+    }
+
     // 在主图画布上绘制选点
-    function renderMainPoints(){
-        mainCtx.clearRect(0,0,screenPointCanvas.width,screenPointCanvas.height);
-        mainCtx.fillStyle = "#ff3333";
-        mainCtx.strokeStyle = "#fff";
-        mainCtx.lineWidth = 2;
+    function renderMainPoints(now){
+        const canvasW = screenPointCanvas.width;
+        const canvasH = screenPointCanvas.height;
+        mainCtx.clearRect(0, 0, canvasW, canvasH);
+        if(!canvasW || !canvasH || pointList.length === 0) return;
+
+        // 波纹尺寸按 CSS 像素换算回来（画布内部是桌面像素，手机上会被缩小显示）
+        const cssW = screenPointCanvas.clientWidth;
+        const u = cssW > 0 ? canvasW / cssW : 1;   // 1 个 CSS 像素 = u 个图像像素
+        const time = typeof now === 'number' ? now : performance.now();
+
         for(const p of pointList){
+            // 红点保持原样：半径 6 桌面像素 + 白边
             mainCtx.beginPath();
-            mainCtx.arc(p.x,p.y,6,0,Math.PI*2);
+            mainCtx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+            mainCtx.fillStyle = '#ff3333';
             mainCtx.fill();
+            mainCtx.strokeStyle = '#fff';
+            mainCtx.lineWidth = 2;
+            mainCtx.lineCap = 'round';
+            mainCtx.stroke();
+
+            const age = time - (p.t0 || 0);
+            if(age >= 0 && age < POINT_RIPPLE_MS){
+                drawPointRipple(p, age, u);
+            }
+        }
+    }
+
+    // 水波纹：两道环由大到小收拢到落点，错峰出现
+    function drawPointRipple(p, age, u){
+        for(const delay of [0, 150]){
+            const local = age - delay;
+            if(local <= 0 || local >= 560) continue;
+            const k = local / 560;
+            const radius = (44 - 38 * easeOutCubic(k)) * u;   // 44 → 6 个 CSS 像素
+            mainCtx.beginPath();
+            mainCtx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+            mainCtx.strokeStyle = 'rgba(255,51,51,' + (0.95 * Math.pow(1 - k, 1.2)).toFixed(3) + ')';
+            mainCtx.lineWidth = (3 - 1.2 * k) * u;
             mainCtx.stroke();
         }
+    }
+
+    function stopPointRipple(){
+        if(pointAnimFrame){
+            cancelAnimationFrame(pointAnimFrame);
+            pointAnimFrame = 0;
+        }
+    }
+
+    function startPointRipple(){
+        stopPointRipple();
+        let lastFrameAt = 0;
+        renderMainPoints(performance.now());
+        const step = (now)=>{
+            // 限制在约 30fps：4K 尺寸画布逐帧重绘没必要跑满
+            if(now - lastFrameAt < 33){
+                pointAnimFrame = requestAnimationFrame(step);
+                return;
+            }
+            lastFrameAt = now;
+            renderMainPoints(now);
+            if(pointList.some((p)=> now - (p.t0 || 0) < POINT_RIPPLE_MS)){
+                pointAnimFrame = requestAnimationFrame(step);
+            }else{
+                pointAnimFrame = 0;
+                renderMainPoints(now);
+            }
+        };
+        pointAnimFrame = requestAnimationFrame(step);
     }
 
     function setPointButtonsEnabled(en){
@@ -885,6 +953,7 @@
         mainImg = null;
         pointList = [];
         dragState = null;
+        stopPointRipple();
         const img = screenArea.querySelector('img');
         if(img) img.remove();
         mainCtx.clearRect(0,0,screenPointCanvas.width,screenPointCanvas.height);
@@ -1144,6 +1213,7 @@
     // 清除选点
     function clearPoints(){
         pointList = [];
+        stopPointRipple();
         renderMainPoints();
         setPointButtonsEnabled(false);
     }
@@ -1180,8 +1250,8 @@
             const result = await rpcAwait('mouse_position', {});
             const x = Math.round(result.x);
             const y = Math.round(result.y);
-            pointList.push({x: x, y: y});
-            renderMainPoints();
+            pointList.push({x: x, y: y, t0: performance.now()});
+            startPointRipple();
             setPointButtonsEnabled(true);
             setStatus('已增加选点：' + pointList.length + ' (' + x + ',' + y + ')');
         }catch(err){

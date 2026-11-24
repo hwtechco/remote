@@ -244,6 +244,136 @@
             min-height: 18px;
             flex-shrink: 0;
         }
+        /* ---------- 配置页：任务 × 账号 勾选矩阵（对照 dialog.py） ---------- */
+        .page-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 60;
+            display: flex;
+            justify-content: center;
+            align-items: stretch;
+            background: #f5f7fa;
+            padding: 16px;
+        }
+        .page-overlay[hidden] {
+            display: none;
+        }
+        .works-dialog {
+            width: min(1180px, 100%);
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+            border: 1px solid #d0d7de;
+            border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+        .works-grid-wrap {
+            flex: 1;
+            overflow: auto;
+        }
+        .works-table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 13px;
+        }
+        .works-table th,
+        .works-table td {
+            border-bottom: 1px solid #eceff2;
+            padding: 6px 10px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .works-table th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: #f7f9fb;
+            font-weight: 500;
+            color: #333;
+        }
+        .works-table th.task-col,
+        .works-table td.task-col {
+            position: sticky;
+            left: 0;
+            z-index: 1;
+            min-width: 132px;
+            text-align: left;
+            background: #fff;
+        }
+        .works-table th.task-col {
+            z-index: 3;
+            background: #f7f9fb;
+        }
+        .works-table td.task-col {
+            color: #444;
+        }
+        .works-table tr.special td {
+            background: #fbfcfd;
+            font-size: 12px;
+            color: #666;
+        }
+        .works-table tr.special td.task-col {
+            background: #fbfcfd;
+        }
+        .works-table input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+        .works-table .col-head .tag {
+            font-weight: 600;
+        }
+        .works-table .col-head .record {
+            margin-top: 2px;
+            font-size: 11px;
+            font-weight: 400;
+            color: #999;
+        }
+        .works-footer {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            border-top: 1px solid #e6e9ee;
+        }
+        .works-status {
+            flex: 1;
+            min-height: 16px;
+            font-size: 12px;
+            color: #888;
+        }
+        .works-status.error {
+            color: #f5222d;
+        }
+        .works-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .page-btn {
+            padding: 6px 14px;
+            font-size: 13px;
+            background: #fff;
+            color: #333;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .page-btn:hover {
+            background: #f0f2f5;
+        }
+        .page-btn.primary {
+            background: #1677ff;
+            border-color: #1677ff;
+            color: #fff;
+        }
+        .page-btn.primary:hover {
+            background: #0958d9;
+        }
+        .page-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
         /* 移动端适配 */
         @media (max-width: 760px) {
             .container {
@@ -318,6 +448,23 @@
                 font-size: 12px;
                 margin: 4px 0 14px;
             }
+            .page-overlay {
+                padding: 8px;
+            }
+            .works-dialog {
+                border-radius: 6px;
+            }
+            .works-table th,
+            .works-table td {
+                padding: 5px 8px;
+            }
+            .works-table th.task-col,
+            .works-table td.task-col {
+                min-width: 108px;
+            }
+            .works-footer {
+                flex-wrap: wrap;
+            }
         }
     </style>
 </head>
@@ -364,6 +511,7 @@
                     <button class="shortcut-btn" id="dragMainPointsRightBtn" disabled>右拖</button>
                     <button class="shortcut-btn" id="scrollUpBtn" disabled>上滚</button>
                     <button class="shortcut-btn" id="scrollDownBtn" disabled>下滚</button>
+                    <button class="shortcut-btn" id="worksBtn" disabled>配置</button>
                     <button class="shortcut-btn" data-command="start" disabled>开始</button>
                     <button class="shortcut-btn" data-command="stop" disabled>停止</button>
                     <button class="shortcut-btn" data-command="shutdown" disabled>关机</button>
@@ -463,6 +611,23 @@
     </div>
 </div>
 
+<!-- 配置页：任务 × 账号 勾选矩阵（对照 xy2/dialog.py） -->
+<div id="worksPage" class="page-overlay" hidden>
+    <div class="works-dialog">
+        <div class="works-grid-wrap">
+            <table id="worksTable" class="works-table"></table>
+        </div>
+        <div class="works-footer">
+            <div id="worksStatus" class="works-status"></div>
+            <div class="works-actions">
+                <button class="page-btn" id="worksCloseBtn">关闭</button>
+                <button class="page-btn" id="worksReloadBtn">重新读取</button>
+                <button class="page-btn primary" id="worksSaveBtn">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     let ws = null;        // 主控连接（键鼠/任务）
     let wsCapture = null; // 抓帧连接（capture 端口）
@@ -479,6 +644,7 @@
     const refreshBtn = document.getElementById('refreshBtn');
     const addMainPointBtn = document.getElementById('addMainPointBtn');
     const statusBar = document.getElementById('statusBar');
+    const worksBtn = document.getElementById('worksBtn');
 
     // 把 ws 地址拆成 协议/主机/端口/路径，便于按 p1/p2 拼出两个端口地址
     function splitWs(url){
@@ -704,6 +870,7 @@
     function setActionButtonsEnabled(en){
         refreshBtn.disabled = !en;
         addMainPointBtn.disabled = !en;
+        worksBtn.disabled = !en;
         document.querySelectorAll('.shortcut-btn[data-command]').forEach((b)=> b.disabled = !en);
         scrollUpBtn.disabled = !en;
         scrollDownBtn.disabled = !en;
@@ -790,20 +957,34 @@
         wsCapture = null;
     }
 
-    // 带响应的 RPC：响应到达后 resolve(result)；超时或出错 reject
-    const pendingRpc = new Map(); // id -> resolve(result)
+    // 带响应的 RPC：服务端回 ok=true 时 resolve(result)，ok=false 或超时 reject
+    const pendingRpc = new Map(); // id -> {resolve, reject, timer}
     function rpcAwait(method, params, timeoutMs){
         if(!authed){ return Promise.reject(new Error('未连接')); }
         const id = ++seq;
         return new Promise((resolve, reject)=>{
-            pendingRpc.set(id, resolve);
-            ws.send(JSON.stringify({id: id, method: method, params: params || {}}));
-            setTimeout(()=>{
+            const timer = setTimeout(()=>{
                 if(pendingRpc.delete(id)){
                     reject(new Error('请求超时'));
                 }
             }, timeoutMs || 3000);
+            pendingRpc.set(id, {resolve: resolve, reject: reject, timer: timer});
+            ws.send(JSON.stringify({id: id, method: method, params: params || {}}));
         });
+    }
+
+    // 结束一条挂起的 RPC；ok=false 时 payload 作为错误信息
+    function settleRpc(id, ok, payload){
+        const entry = pendingRpc.get(id);
+        if(!entry){ return false; }
+        pendingRpc.delete(id);
+        clearTimeout(entry.timer);
+        if(ok){
+            entry.resolve(payload);
+        }else{
+            entry.reject(new Error(payload || '命令失败'));
+        }
+        return true;
     }
 
     // 解码二进制帧：head(JSON,含 payloads 长度) + \n + 各 payload 二进制
@@ -867,19 +1048,13 @@
         // 失败回执（命令执行失败 / 抓帧失败 / 未知方法 / 参数错误）
         if(obj.ok === false){
             const msg = obj.msg !== undefined ? obj.msg : '未知错误';
-            if(obj.id !== undefined && pendingRpc.has(obj.id)){
-                const reject = pendingRpc.get(obj.id);
-                pendingRpc.delete(obj.id);
-                reject(new Error(msg));
-            }
+            if(obj.id !== undefined){ settleRpc(obj.id, false, msg); }
             setStatus('❌ ' + msg);
             return;
         }
-        // 带响应的 RPC（如 mouse_position）：id 命中后交回 Promise
+        // 带响应的 RPC（如 mouse_position / load_works / save_works）：id 命中后交回 Promise
         if(obj.id !== undefined && pendingRpc.has(obj.id)){
-            const resolve = pendingRpc.get(obj.id);
-            pendingRpc.delete(obj.id);
-            resolve(obj.result);
+            settleRpc(obj.id, true, obj.result);
             return;
         }
         // 其它命令的普通回执
@@ -1104,6 +1279,247 @@
         });
     });
 
+    // ================== 配置页（任务 × 账号 勾选矩阵，对照 dialog.py） ==================
+
+    const worksPage = document.getElementById('worksPage');
+    const worksTable = document.getElementById('worksTable');
+    const worksStatusEl = document.getElementById('worksStatus');
+    const worksSaveBtn = document.getElementById('worksSaveBtn');
+    let worksMeta = [];      // 服务端返回的 works，保留 tag / record_name / region
+    let taskRows = [];       // 矩阵行：任务名
+    let columns = [];        // 每列的勾选框引用
+    let worksDirty = false;
+
+    function setWorksStatus(text, isError){
+        worksStatusEl.textContent = text || '';
+        worksStatusEl.classList.toggle('error', !!isError);
+    }
+
+    function markWorksDirty(){
+        worksDirty = true;
+        setWorksStatus('有未保存的修改');
+    }
+
+    function createCheckbox(checked, onChange){
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.checked = !!checked;
+        box.addEventListener('change', onChange);
+        return box;
+    }
+
+    // 任一任务勾选变化后，同步该账号的「全选」状态
+    function syncAllState(colIndex){
+        const column = columns[colIndex];
+        const all = column.boxes.length > 0 && column.boxes.every((box)=> box.checked);
+        if(column.allBox.checked !== all){
+            column.block = true;
+            column.allBox.checked = all;
+            column.block = false;
+        }
+    }
+
+    function renderMatrix(works, tasks){
+        worksMeta = works.map((work)=> Object.assign({}, work, {tasks: (work.tasks || []).slice()}));
+        taskRows = tasks;
+        columns = [];
+        worksTable.innerHTML = '';
+
+        worksMeta.forEach(()=> {
+            columns.push({boxes: [], allBox: null, enableBox: null, block: false});
+        });
+
+        // 表头：学科列 + 每个账号（tag 为主，record_name 辅助）
+        const thead = document.createElement('thead');
+        const headRow = document.createElement('tr');
+        const corner = document.createElement('th');
+        corner.className = 'task-col';
+        corner.textContent = '任务';
+        headRow.appendChild(corner);
+        worksMeta.forEach((work)=>{
+            const th = document.createElement('th');
+            th.className = 'col-head';
+            const tag = document.createElement('div');
+            tag.className = 'tag';
+            tag.textContent = work.tag || '(未命名)';
+            const record = document.createElement('div');
+            record.className = 'record';
+            record.textContent = work.record_name || '';
+            th.appendChild(tag);
+            th.appendChild(record);
+            headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        worksTable.appendChild(thead);
+
+        // 任务行
+        const tbody = document.createElement('tbody');
+        taskRows.forEach((task, rowIndex)=>{
+            const tr = document.createElement('tr');
+            const nameCell = document.createElement('td');
+            nameCell.className = 'task-col';
+            nameCell.textContent = task;
+            tr.appendChild(nameCell);
+            worksMeta.forEach((work, colIndex)=>{
+                const td = document.createElement('td');
+                const box = createCheckbox(work.tasks.indexOf(task) >= 0, ()=>{
+                    syncAllState(colIndex);
+                    markWorksDirty();
+                });
+                td.appendChild(box);
+                tr.appendChild(td);
+                columns[colIndex].boxes.push(box);
+            });
+            tbody.appendChild(tr);
+        });
+
+        // 全选行
+        const allRow = document.createElement('tr');
+        allRow.className = 'special';
+        const allName = document.createElement('td');
+        allName.className = 'task-col';
+        allName.textContent = '全选';
+        allRow.appendChild(allName);
+        worksMeta.forEach((work, colIndex)=>{
+            const td = document.createElement('td');
+            const column = columns[colIndex];
+            column.allBox = createCheckbox(
+                column.boxes.length > 0 && column.boxes.every((box)=> box.checked),
+                ()=>{
+                    if(column.block){
+                        column.block = false;
+                        return;
+                    }
+                    column.boxes.forEach((box)=> { box.checked = column.allBox.checked; });
+                    markWorksDirty();
+                }
+            );
+            td.appendChild(column.allBox);
+            allRow.appendChild(td);
+        });
+        tbody.appendChild(allRow);
+
+        // 启用账号行
+        const enableRow = document.createElement('tr');
+        enableRow.className = 'special';
+        const enableName = document.createElement('td');
+        enableName.className = 'task-col';
+        enableName.textContent = '启用账号';
+        enableRow.appendChild(enableName);
+        worksMeta.forEach((work, colIndex)=>{
+            const td = document.createElement('td');
+            const column = columns[colIndex];
+            column.enableBox = createCheckbox(work.enable, markWorksDirty);
+            td.appendChild(column.enableBox);
+            enableRow.appendChild(td);
+        });
+        tbody.appendChild(enableRow);
+        worksTable.appendChild(tbody);
+    }
+
+    async function loadWorks(){
+        if(!authed){
+            setWorksStatus('未连接，无法读取配置', true);
+            return;
+        }
+        setWorksStatus('正在读取...');
+        worksSaveBtn.disabled = true;
+        try{
+            const worksResult = await rpcAwait('load_works', {}, 5000);
+            const works = (worksResult && worksResult.works) || [];
+            let tasks = [];
+            try{
+                const tasksResult = await rpcAwait('load_tasks', {}, 5000);
+                tasks = (tasksResult && tasksResult.tasks) || [];
+            }catch(err){
+                tasks = [];
+            }
+            // 任务目录取不到时退回各账号任务并集；再补上配置里独有的任务，避免保存时被丢掉
+            if(!tasks.length){
+                const seen = new Set();
+                works.forEach((work)=> (work.tasks || []).forEach((name)=> seen.add(name)));
+                tasks = Array.from(seen);
+            }
+            const known = new Set(tasks);
+            works.forEach((work)=> (work.tasks || []).forEach((name)=>{
+                if(!known.has(name)){
+                    known.add(name);
+                    tasks.push(name);
+                }
+            }));
+            if(!works.length){
+                worksMeta = [];
+                columns = [];
+                worksTable.innerHTML = '';
+                setWorksStatus('服务端没有 works 配置', true);
+                return;
+            }
+            renderMatrix(works, tasks);
+            worksDirty = false;
+            setWorksStatus('已读取 ' + works.length + ' 个账号 / ' + tasks.length + ' 个任务');
+        }catch(err){
+            setWorksStatus('❌ 读取失败: ' + err.message, true);
+        }finally{
+            worksSaveBtn.disabled = false;
+        }
+    }
+
+    async function saveWorks(){
+        if(!authed){
+            setWorksStatus('未连接，无法保存', true);
+            return;
+        }
+        if(!worksMeta.length){
+            setWorksStatus('没有可保存的配置', true);
+            return;
+        }
+        // tag / record_name / region 原样带回，只提交勾选结果
+        const works = worksMeta.map((work, colIndex)=>{
+            const column = columns[colIndex];
+            return {
+                enable: column.enableBox.checked,
+                tag: work.tag,
+                record_name: work.record_name,
+                region: work.region || null,
+                tasks: taskRows.filter((task, rowIndex)=> column.boxes[rowIndex].checked)
+            };
+        });
+        worksSaveBtn.disabled = true;
+        setWorksStatus('正在保存...');
+        try{
+            const result = await rpcAwait('save_works', {works: works}, 8000);
+            const count = result && typeof result.count === 'number' ? result.count : works.length;
+            worksDirty = false;
+            setWorksStatus('✅ 已保存 ' + count + ' 个账号配置');
+        }catch(err){
+            setWorksStatus('❌ 保存失败: ' + err.message, true);
+        }finally{
+            worksSaveBtn.disabled = false;
+        }
+    }
+
+    function openWorksPage(){
+        if(!authed){ alert('未完成连接'); return; }
+        worksPage.hidden = false;
+        loadWorks();
+    }
+
+    function closeWorksPage(){
+        if(worksDirty && !confirm('有未保存的修改，确定关闭吗？')){
+            return;
+        }
+        worksPage.hidden = true;
+        worksDirty = false;
+    }
+
+    worksBtn.addEventListener('click', openWorksPage);
+    worksSaveBtn.addEventListener('click', saveWorks);
+    document.getElementById('worksReloadBtn').addEventListener('click', ()=>{
+        if(worksDirty && !confirm('重新读取会丢弃未保存的修改，继续吗？')){ return; }
+        loadWorks();
+    });
+    document.getElementById('worksCloseBtn').addEventListener('click', closeWorksPage);
+
     connectBtn.addEventListener('click',()=>{
         if(ws){
             closeCapture();
@@ -1185,6 +1601,10 @@
             connectBtn.classList.remove('disconnect');
             setActionButtonsEnabled(false);
             setPointButtonsEnabled(false);
+            if(!worksPage.hidden){
+                setWorksStatus('连接已断开，无法保存', true);
+                worksSaveBtn.disabled = true;
+            }
             resetScreen();
         }
     });

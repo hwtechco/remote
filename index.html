@@ -30,19 +30,16 @@
             margin-bottom: 12px;
             flex-shrink: 0;
         }
-        /* 连接栏：u + p1 + p2 + token + 按钮 */
+        /* 连接栏：主控地址 + 抓帧地址 + token + 按钮 */
         .conn-bar {
             display: flex;
             gap: 10px;
             align-items: center;
         }
-        .conn-bar #wsUrl {
-            flex: 1 1 auto;
+        .conn-bar #cmdUrl,
+        .conn-bar #capUrl {
+            flex: 1 1 0;
             min-width: 0;
-        }
-        .conn-bar .port-input {
-            width: 110px;
-            flex: 0 0 auto;
         }
         .conn-bar #wsToken {
             width: 150px;
@@ -403,14 +400,14 @@
                 font-size: 16px;
                 padding: 8px 10px;
             }
-            /* 连接栏在窄屏换行：u 独占一行，端口/Token 等分剩余宽度 */
+            /* 连接栏在窄屏换行：两个地址各占一行，Token 与按钮并排 */
             .conn-bar {
                 flex-wrap: wrap;
             }
-            .conn-bar #wsUrl {
+            .conn-bar #cmdUrl,
+            .conn-bar #capUrl {
                 flex: 1 1 100%;
             }
-            .conn-bar .port-input,
             .conn-bar #wsToken {
                 flex: 1 1 0;
                 width: auto;
@@ -472,9 +469,8 @@
 <div class="container">
     <div class="item">
         <div class="conn-bar">
-            <input autocomplete="off" id="wsUrl" placeholder="WebSocket 地址（如 ws://192.168.1.5）" type="text">
-            <input autocomplete="off" class="port-input" id="p1Input" inputmode="numeric" placeholder="主控端口" type="text">
-            <input autocomplete="off" class="port-input" id="p2Input" inputmode="numeric" placeholder="抓帧端口" type="text">
+            <input autocomplete="off" id="cmdUrl" placeholder="主控地址（含端口，如 ws://192.168.1.5:9527）" type="text">
+            <input autocomplete="off" id="capUrl" placeholder="抓帧地址（含端口，如 ws://192.168.1.5:9394）" type="text">
             <input autocomplete="off" id="wsToken" placeholder="Token" type="text">
             <button id="connectBtn">连接</button>
         </div>
@@ -636,9 +632,8 @@
     let authed = false;   // 主控连接是否通过鉴权
     let capAuthed = false; // 抓帧连接是否通过鉴权
     let authTimer = null;
-    const wsUrlInput = document.getElementById('wsUrl');
-    const p1Input = document.getElementById('p1Input');
-    const p2Input = document.getElementById('p2Input');
+    const cmdUrlInput = document.getElementById('cmdUrl');   // 主控地址（含端口）
+    const capUrlInput = document.getElementById('capUrl');   // 抓帧地址（含端口）
     const wsToken = document.getElementById('wsToken');
     const connectBtn = document.getElementById('connectBtn');
     const refreshBtn = document.getElementById('refreshBtn');
@@ -646,7 +641,7 @@
     const statusBar = document.getElementById('statusBar');
     const worksBtn = document.getElementById('worksBtn');
 
-    // 把 ws 地址拆成 协议/主机/端口/路径，便于按 p1/p2 拼出两个端口地址
+    // 把 ws 地址拆成 协议/主机/端口/路径（用于校验地址写法）
     function splitWs(url){
         let u = (url || '').trim();
         if(!u){ return {scheme:'ws://', host:'', port:null, path:''}; }
@@ -660,32 +655,34 @@
         return parts.scheme + parts.host + (port ? ':' + port : '') + parts.path;
     }
 
-    // 服务端地址格式：u=ws://ip&p1=9527&p2=9394&t=xxx
-    // 页面把 u 当主机，p1 / p2 分别填主控与抓帧端口
+    // 链接参数格式：?cmd_url=ws://ip:9527&cap_url=ws://ip:9394&t=xxx
+    // cmd_url=主控地址，cap_url=抓帧地址，两者都是含端口的完整地址
     (function(){
         const params = new URLSearchParams(location.search);
-        const u = (params.get('u') || '').trim();
         const token = params.get('t');
         if(token){ wsToken.value = token.trim(); }
-        if(!u){ return; }
-        wsUrlInput.value = u; // u 原样保留（可能自带端口）
-        const parts = splitWs(u);
-        p1Input.value = params.get('p1') || (parts.port ? String(parts.port) : '');
-        p2Input.value = params.get('p2') || '';
+        const c1 = (params.get('cmd_url') || '').trim();
+        const c2 = (params.get('cap_url') || '').trim();
+        if(c1){ cmdUrlInput.value = c1; }
+        if(c2){ capUrlInput.value = c2; }
     })();
 
-    // 主控地址 = u + p1（p1 为空时用 u 里自带的端口）
-    function commandUrl(){
-        const parts = splitWs(wsUrlInput.value);
-        const port = parseInt(p1Input.value, 10) || parts.port;
-        return joinWs(parts, port);
+    // 手填的地址允许省略协议，统一补 ws://
+    function normalizeWs(url){
+        let u = (url || '').trim();
+        if(!u){ return ''; }
+        if(!/^wss?:\/\//i.test(u)){ u = 'ws://' + u; }
+        return u;
     }
 
-    // 抓帧地址 = u + p2
+    // 主控地址：用户直接填完整地址（含端口）
+    function commandUrl(){
+        return normalizeWs(cmdUrlInput.value);
+    }
+
+    // 抓帧地址：用户直接填完整地址（含端口）
     function captureUrl(){
-        const parts = splitWs(wsUrlInput.value);
-        const port = parseInt(p2Input.value, 10);
-        return port ? joinWs(parts, port) : '';
+        return normalizeWs(capUrlInput.value);
     }
 
     // 图片显示区域
@@ -981,7 +978,7 @@
     function openCapture(){
         const url = captureUrl();
         if(!url){
-            setStatus('⚠️ 未填写抓帧端口 p2');
+            setStatus('⚠️ 未填写抓帧地址');
             return;
         }
         capAuthed = false;
@@ -1596,16 +1593,16 @@
             ws.close();
             return;
         }
-        const parts = splitWs(wsUrlInput.value);
-        if(!parts.host){
-            alert('请填写 WebSocket 地址（u）');
-            return;
-        }
-        if(!(parseInt(p1Input.value, 10) || parts.port)){
-            alert('请填写主控端口 p1');
-            return;
-        }
         const url = commandUrl();
+        const parts = splitWs(url);
+        if(!url || !parts.host){
+            alert('请填写主控地址（含端口，如 ws://192.168.1.5:9527）');
+            return;
+        }
+        if(!parts.port){
+            alert('主控地址需要包含端口');
+            return;
+        }
         authed = false;
         capAuthed = false;
         seq = 0;
